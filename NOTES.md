@@ -1,0 +1,79 @@
+# NW-E394 firmware notes (2026-10-12)
+
+Source: Sony's `NW-E390_V1_01.exe` (7,669,504 bytes, sha256 `870121a0...c809a4`), firmware
+1.01 for NW-E393/E394/E395. Never executed; unpacked as data.
+
+## Unpacking
+
+1. The .exe is an InstallShield SFX. One real CAB at offset `0x485d8` (7,365,077 bytes);
+   carve it and run Windows `expand.exe -F:*`.
+2. The CAB holds `SoftwareUpdateTool.exe`, `Data\App\WmFwUpdater.dll`,
+   `Data\Device\SWUpdate.xml` and `Data\Device\RKNANOFW.IMG` (13,631,492 bytes).
+   `SWUpdate.xml` says the updater writes the image to `\RKNANOFW.IMG` on the player.
+3. `python -I tools/rknanofw.py RKNANOFW.IMG extract/fw` splits the image;
+   `python -I tools/imageres.py extract/fw/imageres0.bin extract/images` dumps the UI images.
+
+## RKNANOFW.IMG
+
+- Rockchip **RKnano** SoC with Rockchip's own RTOS ("RKnano SDK 1.0"), not Linux.
+- RKnanoFW format, as parsed by Rockbox `utils/rknanoutils/rkboottool`. Header: date 2016-10-14,
+  vendor "Rockchip", magic `RKnanoFW` at 0x1f8, size field 0xc98000.
+- **Not encrypted.** Stages 0-2 are empty; stage 3 (the whole OS, 5.6 MB) is plain. rkboottool's
+  RC4 key is only needed for stages 0-2 and BOOT entries.
+- Checksum: the last 4 bytes (LE) are Rockchip's `boot_crc` (the CRC table in rkboottool) over
+  everything before them. Verified: `0xe3ae9225`. A modified image can be re-signed.
+- After `size` (0xc98000) there is a 0x68004-byte tail: a copy of the header, padding, then the CRC.
+- Stage 3: base 0x03050000, 146 code/data sections, but only 21 distinct run addresses, so it is an
+  overlay scheme (79 sections run at 0x0). Load into Ghidra as ARM (Cortex-M, Thumb) with overlays.
+
+## Resources
+
+| Blob | Format |
+|---|---|
+| font0, font1 | starts with a u16 identity table 0,1,2,... (glyph map?) - not decoded |
+| gbk0 | Chinese GBK font - not decoded |
+| strtbl0 | 13 languages, 1,388 UTF-16LE strings; `\` is a line break; German first |
+| imageres0 | `ROCK26IMAGERES`, 234 images: 16-byte entries {u16 w,h,x,y; u32 size, offset}, RGB565 **big-endian** |
+
+Images include the boot screen ("For Music Lovers, By Music Lovers"), the "POWER OFF / See You
+Later" screen, icons, digits, the EQ graph, and factory test patterns (colour bars, diagonals),
+so there is probably a hidden test mode.
+
+Firmware strings worth following: "Old version is: %d", "New version is: %d", "Version is not
+changed", "Firmware upgrade", "Firmware downgrade", "Firmware update failed!/success!".
+
+## Patching
+
+`tools/patch_image.py IN.IMG 44 picture.png OUT.IMG` swaps the boot screen (image 44, 128x160)
+and rewrites the CRC. Verified on a test build: only the 40,960 pixel bytes and the CRC change.
+`tools/bootscreen.py` makes a 128x160 RGB565-accurate picture from a photo.
+
+## Sony's updater
+
+`WmFwUpdater.dll` has two paths: MTP (`CWmFwUpdateWorkerMtp`) and USB mass storage
+(`CWmFwUpdateWorkerMsc`) with SCSI pass-through (`CSptIoCtl`), so it probably copies the image
+and then sends a vendor SCSI command to make the player reboot into the update. The PC tool
+compares versions (`VERSION_EQUAL`, `VERSION_OLDER`, `VERSION_NEWER`, `VERSION_CHECK_PASS`;
+"Firmware version is not correct. ( pc:"%s" != device:"%s" )").
+
+## Flashing (worked 2026-10-12, "For Cat Lovers, By Cat Lovers" boot screen)
+
+- Copying `RKNANOFW.IMG` to the player's root and power-cycling does nothing: the player
+  never reads the file on its own (it was still there afterwards).
+- The install routine (stage 3 section 9, runs at 0x306ca48) opens `RKNANOFWIMG`, checks the
+  `RKnanoFW` magic, that the file size is the header size rounded up to 1 MiB plus 4, and that the
+  backup header at `size` equals the main header, then writes NAND and deletes the file.
+  **It has no version check.** It only runs when Sony's tool triggers it over USB.
+- Sony's PC tool refuses an equal version, so `tools/build_update.py` sets 1.02 in both
+  `SWUpdate.xml` and the firmware's `<firmwareversion>` (the only version string in the image).
+- Steps: `uv run --no-project --with pillow python -I tools/build_update.py picture.png out/updater`,
+  then run `out\updater\SoftwareUpdateTool.exe` with the player plugged in.
+- Result: new boot screen, player reports 1.02, music and playlists untouched, image file deleted.
+  For the next mod, use `--version 1.03` (the tool needs a newer version each time).
+- Backup of the player's files from before the flash: `backup/`.
+
+## Not known yet
+
+- The USB command Sony's tool sends to start the install (would allow flashing without Sony's tool).
+- Brick recovery: Rockbox `utils/rknanoutils/rkload` loads code over USB in the RKnano boot-ROM
+  mode. How to enter that mode on this player is unknown (possibly a test point inside).

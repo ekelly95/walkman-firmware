@@ -1,0 +1,11 @@
+nwe39x is free software under the GNU General Public License, version 2 or (at your option)
+any later version. See LICENSE.
+
+The RKnanoFW header layout and the RC4 descrambling in src/nwe39x/rknanofw.py, and the CRC in
+src/nwe39x/crc.py, are ported from Rockbox's utils/rknanoutils/rkboottool/rkboottool.c
+(https://github.com/Rockbox/rockbox), copyright the Rockbox project and its contributors,
+GPL-2.0-or-later.
+
+This repository contains no Sony software or firmware. The tools read Sony's own updater, which
+you download from Sony, and patch it on your machine. "Sony" and "Walkman" are trademarks of
+Sony Group Corporation; this project is not affiliated with or endorsed by Sony.

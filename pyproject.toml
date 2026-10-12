@@ -1,0 +1,24 @@
+[project]
+name = "nwe39x"
+version = "0.1.0"
+description = "Firmware modding tools for Sony's NW-E393/E394/E395 Walkman (Rockchip RKnano)"
+readme = "README.md"
+license = "GPL-2.0-or-later"
+requires-python = ">=3.12"
+dependencies = ["pillow>=10"]
+
+[project.scripts]
+nwe39x = "nwe39x.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "capstone>=5"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nwe39x"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

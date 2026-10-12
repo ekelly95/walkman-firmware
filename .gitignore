@@ -1,0 +1,23 @@
+# Sony's files and everything derived from them stay local.
+download/
+extract/
+out/
+work/
+reference/
+*.IMG
+*.img
+*.exe
+*.cab
+*.dll
+
+# Personal data.
+backup/
+photos/
+
+# Python.
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# Personal photos stay out of git for now
+mods/*/images/
