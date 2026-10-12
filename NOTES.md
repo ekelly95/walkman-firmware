@@ -72,6 +72,26 @@ compares versions (`VERSION_EQUAL`, `VERSION_OLDER`, `VERSION_NEWER`, `VERSION_C
   For the next mod, use `--version 1.03` (the tool needs a newer version each time).
 - Backup of the player's files from before the flash: `backup/`.
 
+## Sony's tool reports false failures (2026-10-12)
+
+- Stock image re-versioned as 1.03 (`nwe39x restore --version 1.03`): the tool said "software
+  update has been failed ... unknown error. Error Code:" (blank), yet a 1 s poll of the drive showed
+  it unmount (player rebooting into the installer), then remount 4 s later reporting **1.03** with
+  `RKNANOFW.IMG` consumed. The install worked; the tool's final check failed.
+- Restoring stock over a mod works (cat 1.02 -> stock 1.03).
+- An earlier attempt (cat-lovers mod as 1.03 over 1.02) also said "failed" and did NOT install
+  (still 1.02, no file left on the drive). Not yet explained; the drive was not being polled then.
+- Cat-lovers mod as 1.04, polled twice a second from launch: the tool quit after 10 s without ever
+  copying the image. Same build again with **nothing touching the drive**: installed (cat, Meowsic,
+  nap-time power-off screen), and the tool still ended with the "failed" message.
+- Conclusions: (1) other processes reading the drive make the tool fail before it copies
+  (probably it needs exclusive access to send its SCSI command); (2) the closing "failed" message
+  is the tool's own post-install check and appears even on clean successful installs.
+- M2 checkpoint passed: mod 1.02 -> stock 1.03 -> mod 1.04.
+- Windows sees the player only as USB mass storage (`SONY WALKMAN 1.00` SCSI inquiry, never
+  changes), so the tool's post-install version check must use the capability XML or a vendor
+  SCSI command. Find out in M5 (`WmFwUpdater.dll`, USB capture).
+
 ## Not known yet
 
 - The USB command Sony's tool sends to start the install (would allow flashing without Sony's tool).

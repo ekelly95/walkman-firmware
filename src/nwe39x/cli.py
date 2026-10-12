@@ -1,6 +1,7 @@
 """nwe39x: mod the firmware of Sony's NW-E393/E394/E395 Walkman.
 
   nwe39x unpack NW-E390_V1_01.exe          unpack Sony's updater into extract/
+  nwe39x status                            connected players and the version they report
   nwe39x info                              header, resources, checks
   nwe39x diff BUILT.IMG                    what a build changes compared with Sony's image
   nwe39x images export DIR                 every UI picture as PNG (+ contact sheet)
@@ -133,10 +134,26 @@ def cmd_restore(args):
     _write(args, Firmware.load(stock_image(args)))
 
 
+FLASH_TIPS = """\
+Before running it: close File Explorer windows and apps showing the player, and leave the drive
+alone until the tool's window closes (other programs reading the drive make it fail before copying).
+Sony's tool may end with "The software update has been failed ... unknown error" even when the
+install worked. Run `nwe39x status` afterwards: the player reports the new version if it installed."""
+
+
 def _write(args, fw: Firmware):
     version = pick_version(args, fw)
     exe = updater.build(args.cab, fw, version, args.out)
     print(f"ready: run {exe} with the player connected (installs as {version})")
+    print(FLASH_TIPS)
+
+
+def cmd_status(args):
+    players = device.find_players()
+    if not players:
+        print("no NW-E390-series player found (is it plugged in and unlocked?)")
+    for p in players:
+        print(f"{p.root}  firmware {p.version}")
 
 
 def main(argv: list[str] | None = None):
@@ -155,6 +172,9 @@ def main(argv: list[str] | None = None):
     p = sub.add_parser("info", help="describe a firmware image")
     image_args(p)
     p.set_defaults(func=cmd_info)
+
+    p = sub.add_parser("status", help="show connected players and their firmware version")
+    p.set_defaults(func=cmd_status)
 
     p = sub.add_parser("diff", help="list what a built image changes compared with Sony's")
     p.add_argument("target", help="built RKNANOFW.IMG, e.g. out/updater/Data/Device/RKNANOFW.IMG")
