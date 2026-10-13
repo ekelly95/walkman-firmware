@@ -16,6 +16,7 @@ def test_font16_glyph_and_width(image_bytes):
     fw = Firmware.from_bytes(image_bytes)
     f = fonts.Font.font16(fw)
     assert f.has(ord("A")) and not f.has(0x4E00)  # synthetic font only has 0x80 glyphs
+    assert not f.has(-1)  # would land before the font
     assert f.width(ord("A")) == 9
     img = f.image(ord("A"))
     assert img.size == (16, 16) and img.getpixel((ord("A") % 8, 0)) == 255
@@ -93,6 +94,7 @@ def test_stock_fonts(stock_bytes, tmp_path):
     fw = Firmware.from_bytes(stock_bytes)
     f16, f12 = fonts.Font.font16(fw), fonts.Font.font12(fw)
     assert f16.has(0xAC00) and f16.has(0x4E00) and f16.width(ord("A")) == 8
+    assert f16.has(0xFFFF) and not f16.has(0x10000)  # the blob's bytes after U+FFFF are not glyphs
     assert f12.has(ord("A")) and f12.has(0x0104) and f12.has(0x0410)
     assert f12.glyph_count == 424 and f12.widths_offset == 0x56054A and f12.width(ord("A")) == 7
     assert f12.rows(ord("A"))[0] == 0 and f12.rows(ord("A"))[11] == 0  # blank top and bottom rows

@@ -1,8 +1,9 @@
 """RKNANOFW.IMG, the firmware image inside Sony's NW-E390 updater.
 
 The header layout and the RC4 scrambling are ported from the RKnanoFW part of Rockbox's
-utils/rknanoutils/rkboottool/rkboottool.c (GPL-2.0-or-later). The size rule, the backup header and
-the CRC are what the player's own install routine checks before it writes flash.
+utils/rknanoutils/rkboottool/rkboottool.c (GPL-2.0-or-later). The magic, the size rule and the
+backup header are what the player's own install routine checks before it writes flash; it does not
+check the CRC (NOTES.md), which `problems()` checks anyway so a damaged image is caught here.
 """
 
 from __future__ import annotations

@@ -90,7 +90,7 @@ def cmd_diff(args):
     for line in rep.lines():
         print("  " + line)
     print("checks: " + ("pass" if not fw.problems() else "; ".join(fw.problems())))
-    if rep.unknown:
+    if not rep.ok:
         sys.exit(1)
 
 
@@ -278,6 +278,9 @@ def cmd_flash(args):
         if rep.unknown:
             raise FirmwareError(f"{len(rep.unknown)} changed bytes are not explained by the build's manifest"
                                 " (first at {:#x}); not flashing. Pass --force if you mean it.".format(rep.unknown[0]))
+        if rep.mismatched:
+            raise FirmwareError(f"{len(rep.mismatched)} bytes inside the manifest's patches are not the patches' new bytes"
+                                " (first at {:#x}); not flashing. Pass --force if you mean it.".format(rep.mismatched[0]))
     p = one_player(args)
     version = flash.flash(img, p.root, wait=not args.no_wait)
     if version:

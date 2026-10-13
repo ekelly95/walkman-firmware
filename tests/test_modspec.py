@@ -45,6 +45,20 @@ def test_apply_theme_in_place_and_verify_explains_it(image_bytes, tmp_path):
     assert verify.explain(stock, fw).unknown == [0x300]
 
 
+def test_verify_checks_patch_bytes_not_just_their_place(image_bytes, tmp_path):
+    from nwe39x import patches
+    stock, fw = Firmware.from_bytes(image_bytes), Firmware.from_bytes(image_bytes)
+    tsv = tmp_path / "p.tsv"
+    tsv.write_text("0\t306c004\t0000\t0102\tnote\n")
+    patches.apply(fw, patches.parse_tsv(tsv))
+    rep = verify.explain(stock, fw, [tsv])
+    assert rep.ok and rep.hits == {"patch note": 2}
+    off = patches.code_offset(fw, 0, 0x306C004, 2)
+    fw.buf[off + 1] = 0xFF  # still inside the patch, but not what it declares
+    rep = verify.explain(stock, fw, [tsv])
+    assert rep.mismatched == [off + 1] and rep.unknown == [] and not rep.ok
+
+
 def test_manifest_roundtrip(tmp_path):
     verify.write_manifest(tmp_path, "1.17", [tmp_path / "p.tsv"], "my-walkman")
     m = verify.read_manifest(tmp_path)

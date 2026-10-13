@@ -53,6 +53,7 @@ RANGES = {
 }
 META_KEY = "nwe39x-font"
 INK, PAPER, GRID = 255, 0, 64
+FONT16_GLYPHS = 0x10000  # one record per BMP code point; the blob has 7,174 more bytes after them
 FONT12_TABLE = 8439  # u16 entries, U+0020..U+20F6
 FONT12_RECORD = 24
 # font12's CJK part, as offsets in the blob (the constants in section 0's readers)
@@ -125,7 +126,7 @@ class Font:
     def offset(self, cp: int) -> int | None:
         if self.name == "font16":
             off = cp * 33
-            return self.blob_offset + off if off + 33 <= self.blob_size else None
+            return self.blob_offset + off if 0 <= cp < FONT16_GLYPHS and off + 33 <= self.blob_size else None
         g = self.glyph(cp)
         if g is None:
             if not self.is_cjk(cp):

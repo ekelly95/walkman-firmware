@@ -9,7 +9,7 @@ deletes the file and reboots. Two 12-byte CDBs, both `FC 00 <op> 'd' 'b' 'm' 'n'
     op 0x20, 0x80 bytes in   REQUEST DEVINFO   "DEVINFO" + info block ("SONY    ", model, ...)
     op 0x04, no data         START FW UPDATE   reboot into the installer
 
-Windows uses the pass-through IOCTL; Linux uses SG_IO on the block device (untested).
+Only Windows is implemented (the pass-through IOCTL); elsewhere `_send` refuses.
 """
 
 from __future__ import annotations
@@ -121,35 +121,10 @@ if sys.platform == "win32":
             k32.CloseHandle(h)
 
 else:
-    import fcntl
-
-    SG_IO = 0x2285
-    SG_DXFER_NONE, SG_DXFER_FROM_DEV = -1, -3
-
     def _send(root: Path, cdb: bytes, data_in: int = 0) -> bytes:
-        dev = _block_device(root)
-        buf = ctypes.create_string_buffer(data_in or 1)
-        sense = ctypes.create_string_buffer(32)
-        cdb_buf = ctypes.create_string_buffer(cdb, len(cdb))
-        # struct sg_io_hdr (see <scsi/sg.h>)
-        hdr = struct.pack("=iiBBHIPPPIIiPBBBBHHiII", ord("S"), SG_DXFER_FROM_DEV if data_in else SG_DXFER_NONE,
-                          len(cdb), 32, 0, 0, 0, data_in, ctypes.addressof(buf), ctypes.addressof(cdb_buf),
-                          ctypes.addressof(sense), TIMEOUT_S * 1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-        hdr = ctypes.create_string_buffer(hdr, len(hdr))
-        with open(dev, "rb") as f:
-            fcntl.ioctl(f.fileno(), SG_IO, hdr)
-        status = hdr.raw[struct.calcsize("=iiBBHIPPPIIiP")]
-        if status != 0:
-            raise FirmwareError(f"SCSI status {status:#x} from {dev}")
-        return buf.raw[:data_in]
-
-    def _block_device(root: Path) -> str:
-        with open("/proc/mounts") as f:
-            for line in f:
-                dev, mnt = line.split()[:2]
-                if Path(mnt) == root:
-                    return dev.rstrip("0123456789") if dev.startswith("/dev/sd") else dev
-        raise FirmwareError(f"no block device mounted at {root}")
+        # An SG_IO version used to live here; its struct format could never pack (`=` with `P`),
+        # so it never ran. Refuse plainly rather than pretend: flash from Windows.
+        raise FirmwareError(f"SCSI pass-through is only implemented on Windows, not {sys.platform}")
 
 
 # Commands ------------------------------------------------------------------------------------

@@ -58,3 +58,23 @@ def test_addresses_outside_the_section_are_rejected(image_bytes):
         patches.code_offset(fw, 0, SEC_PA + 0x10000, 2)
     with pytest.raises(FirmwareError):
         patches.code_offset(fw, 7, SEC_PA, 2)
+
+
+def test_file_offsets_outside_the_payload_are_rejected(image_bytes):
+    fw = Firmware.from_bytes(image_bytes)
+    with pytest.raises(FirmwareError):
+        patches.code_offset(fw, patches.FILE, 0x10, 1)  # header
+    with pytest.raises(FirmwareError):
+        patches.code_offset(fw, patches.FILE, fw.size_field, 1)  # backup header
+    with pytest.raises(FirmwareError):
+        patches.code_offset(fw, patches.FILE, fw.size_field - 1, 2)  # straddles the end
+    assert patches.code_offset(fw, patches.FILE, fw.size_field - 1, 1) == fw.size_field - 1
+
+
+def test_apply_stays_all_or_nothing_past_the_payload(image_bytes):
+    fw = Firmware.from_bytes(image_bytes)
+    tail = fw.size_field + 0x100  # inside the file, past the payload
+    bad = patches.Patch(patches.FILE, tail, bytes(fw.buf[tail:tail + 1]), b"\x55")
+    with pytest.raises(FirmwareError):
+        patches.apply(fw, [patches.Patch(0, SEC_PA, b"\0", b"\x01"), bad])
+    assert bytes(fw.buf) == image_bytes

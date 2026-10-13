@@ -61,7 +61,7 @@ compares versions (`VERSION_EQUAL`, `VERSION_OLDER`, `VERSION_NEWER`, `VERSION_C
 - Copying `RKNANOFW.IMG` to the player's root and power-cycling does nothing: the player
   never reads the file on its own (it was still there afterwards).
 - The install routine (stage 3 section 9, runs at 0x306ca48) opens `RKNANOFWIMG`, checks the
-  `RKnanoFW` magic, that the file size is the header size rounded up to 1 MiB plus 4, and that the
+  `RKnanoFW` magic, that the file size is the header size plus a 16 KiB margin rounded up to 1 MiB, plus 4, and that the
   backup header at `size` equals the main header, then writes NAND and deletes the file.
   **It has no version check.** It only runs when Sony's tool triggers it over USB.
 - Sony's PC tool refuses an equal version, so `tools/build_update.py` sets 1.02 in both

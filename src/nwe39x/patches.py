@@ -66,7 +66,7 @@ def parse_tsv(path: Path) -> list[Patch]:
 def code_offset(fw: Firmware, section: int, addr: int, size: int = 1) -> int:
     """File offset in the image of `size` bytes of code at run address `addr` in `section`."""
     if section == FILE:
-        if not HEADER_SIZE <= addr and addr + size <= fw.size_field:
+        if not (HEADER_SIZE <= addr and addr + size <= fw.size_field):
             raise FirmwareError(f"file offset {addr:#x}+{size} is outside the payload")
         return addr
     stage = fw.blob("stage", 3)

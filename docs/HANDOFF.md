@@ -7,7 +7,7 @@ Paste this into a new session. It is the state of the project as of 2026-10-13 a
 Firmware modding tools for Sony's NW-E393/E394/E395 Walkman (Rockchip RKnano SoC, Rockchip's own
 RTOS, ARM Thumb-2). Repo: `C:\Users\edmun\Projects\walkman-firmware` (private GitHub
 `ekelly95/walkman-firmware`, branch `main`). Python 3.12, `uv`, package `nwe39x` in `src/`,
-CLI `uv run nwe39x ...`. Tests: `uv run pytest -q` (52 pass). **NOTES.md is the knowledge base**:
+CLI `uv run nwe39x ...`. Tests: `uv run pytest -q` (72 pass). **NOTES.md is the knowledge base**:
 every reverse-engineering fact, with addresses, lives there; read it first and keep it current.
 
 The player (one unit, serial in `nwe39x devinfo`) is on **1.20 = `mods/my-walkman`**: dark
@@ -41,8 +41,12 @@ be `file` for an absolute offset. Old bytes must match or the build refuses. `bu
 
 - **No brick recovery exists.** Tested: no key held at USB plug-in enters the RKnano boot-ROM
   loader (071b:3226). The installer (stage 3 section 9) checks magic, size rule and backup header,
-  not the CRC, and writes the header last. So: never patch anything that runs before the UI is up,
-  never bypass `Firmware.problems()` or the flash gate, keep `out/stock-restore` current.
+  not the CRC, and writes the header last. Nothing in the tools stops a patch from breaking boot:
+  `problems()` and `diff` check the image's shape and that every changed byte is declared, not
+  what a patch does. So patch pre-UI code only when needed and minimally (the volume-limit
+  section 10 patch is one, running on the player now), check each encoding with capstone, never
+  touch the entry vector, the loader or the installer (section 9), never bypass
+  `Firmware.problems()` or the flash gate, and keep `out/stock-restore` current.
 - Flashing is the user's hardware; ask before anything that is not a normal build-and-flash.
 - Commit style: short title, body says what and why, `Co-Authored-By` line. Push to `origin main`.
 - Don't commit Sony's files, the user's photos, or generated assets. `.gitignore` already covers them.
