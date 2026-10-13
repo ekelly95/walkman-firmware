@@ -4,6 +4,7 @@
   nwe39x status                            connected players and the version they report
   nwe39x info                              header, resources, checks
   nwe39x diff BUILT.IMG                    what a build changes compared with Sony's image
+  nwe39x blobs DIR                         raw resources (stage3.bin is the OS, for Ghidra)
   nwe39x images export DIR                 every UI picture as PNG (+ contact sheet)
   nwe39x strings export FILE.tsv           every UI string, all 13 languages
   nwe39x bootscreen PHOTO OUT.png          make a 128x160 boot picture from a photo
@@ -95,6 +96,17 @@ def cmd_diff(args):
         sys.exit(1)
 
 
+def cmd_blobs(args):
+    fw = Firmware.load(stock_image(args))
+    out = Path(args.dir)
+    out.mkdir(parents=True, exist_ok=True)
+    for blobs in fw.blobs.values():
+        for b in blobs:
+            if b.size:
+                (out / f"{b.table}{b.index}.bin").write_bytes(fw.read(b))
+                print(f"  {b.table}{b.index}.bin  {b.size:,} bytes")
+
+
 def cmd_images_export(args):
     fw = Firmware.load(stock_image(args))
     n = imageres.export(fw, Path(args.dir), Path(args.dir) / "_contact_sheet.png" if args.sheet else None)
@@ -184,6 +196,11 @@ def main(argv: list[str] | None = None):
     p.add_argument("target", help="built RKNANOFW.IMG, e.g. out/updater/Data/Device/RKNANOFW.IMG")
     p.add_argument("--cab", type=Path, default=DEFAULT_EXTRACT / "cab", help="unpacked updater folder")
     p.set_defaults(func=cmd_diff)
+
+    p = sub.add_parser("blobs", help="write every resource (stage3 = the OS, fonts, strings, images) to DIR")
+    p.add_argument("dir")
+    image_args(p)
+    p.set_defaults(func=cmd_blobs)
 
     images = sub.add_parser("images", help="UI pictures").add_subparsers(dest="images_cmd", required=True)
     p = images.add_parser("export", help="write every picture as PNG")
