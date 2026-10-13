@@ -1,0 +1,101 @@
+# Handoff: walkman-firmware (nwe39x)
+
+Paste this into a new session. It is the state of the project as of 2026-10-13 and how to work on it.
+
+## What this is
+
+Firmware modding tools for Sony's NW-E393/E394/E395 Walkman (Rockchip RKnano SoC, Rockchip's own
+RTOS, ARM Thumb-2). Repo: `C:\Users\edmun\Projects\walkman-firmware` (private GitHub
+`ekelly95/walkman-firmware`, branch `main`). Python 3.12, `uv`, package `nwe39x` in `src/`,
+CLI `uv run nwe39x ...`. Tests: `uv run pytest -q` (52 pass). **NOTES.md is the knowledge base**:
+every reverse-engineering fact, with addresses, lives there; read it first and keep it current.
+
+The player (one unit, serial in `nwe39x devinfo`) is on **1.17 = `mods/my-walkman`**: dark
+theme, Terminus 12 in the menu font, matching boot/power-off screens, volume cap off, FM Radio
+dropped from the home menu. Sony's stock image is 1.01; our versions only count upward so Unit
+Information tells builds apart (the installer itself never checks versions).
+
+## Daily commands
+
+```
+uv run nwe39x status / devinfo                       # connected player, firmware, DEVINFO over SCSI
+uv run nwe39x build --mod mods/my-walkman -o out/x   # version = player's + 1 unless --version
+uv run nwe39x diff out/x/Data/Device/RKNANOFW.IMG    # names every changed byte; reads manifest.json
+uv run nwe39x flash --updater out/x                  # verifies against stock, copies, sends START FW UPDATE, waits (~15 s)
+uv run nwe39x restore -o out/stock-restore           # Sony's image, re-versioned
+```
+
+Sony's files live in `extract/cab/` (ignored by git; `nwe39x unpack NW-E390_V1_01.exe` recreates
+it from the updater .exe in `download/`). Generated assets (theme pictures, glyph sheets,
+no-fm patches, clean boot screens) are ignored too; each mod's README says how to regenerate.
+
+## Mods and manifests
+
+A mod is a folder with `mod.toml` (`src/nwe39x/modspec.py`): `include` (other mods, applied
+first), `theme` (preset name), `images`, `fonts`, `strings`, `patches`. `mods/README.md` lists
+them. `patches.tsv` lines are `section<TAB>run address<TAB>old<TAB>new<TAB>note`; `section` may
+be `file` for an absolute offset. Old bytes must match or the build refuses. `build` writes
+`manifest.json` beside the image; `flash` refuses unexplained bytes unless `--force`.
+
+## Hard rules
+
+- **No brick recovery exists.** Tested: no key held at USB plug-in enters the RKnano boot-ROM
+  loader (071b:3226). The installer (stage 3 section 9) checks magic, size rule and backup header,
+  not the CRC, and writes the header last. So: never patch anything that runs before the UI is up,
+  never bypass `Firmware.problems()` or the flash gate, keep `out/stock-restore` current.
+- Flashing is the user's hardware; ask before anything that is not a normal build-and-flash.
+- Commit style: short title, body says what and why, `Co-Authored-By` line. Push to `origin main`.
+- Don't commit Sony's files, the user's photos, or generated assets. `.gitignore` already covers them.
+
+## Firmware facts you will need (details and addresses in NOTES.md)
+
+- `RKNANOFW.IMG`: header 0x200, blobs stage3 (the OS, 146 overlay sections, base 0x3050000),
+  font0 (12 px), font1 (16 px), gbk0, strtbl0 (13 languages), imageres0 (234 RGB565-BE pictures).
+  `rknanofw.py` parses it; `Section` has `code_va/pa`, `data_va/pa`. Many sections share run
+  addresses: always name the section with an address. Ghidra project `work/ghidra/NWE390` has
+  the overlays loaded; `ghidra/Xrefs.java` (`callers@0x...`, `@0x...`, `range@a-b`, overlay form
+  `s017_code::0306c4a4`) and `ghidra/DecompileByString.java` run headless:
+  `analyzeHeadless work/ghidra NWE390 -process -noanalysis -scriptPath ghidra -postScript Xrefs.java OUT.c args...`
+  For quick scans, capstone (Thumb) over section bytes in Python is faster than Ghidra.
+- Settings block in SRAM at `0x4b70`: `+0x4e` volume (0-30), `+0x4a` region/limit byte (0 =
+  limited), `+0x353` demo-mode flag, `+0x355` selected home entry id.
+- Pictures: `draw_picture_at(index, x, y)` `0x3062400`, `draw_picture(index, dx, dy)` `0x3062212`,
+  stored-position variant `0x3062250`, blit `0x306200a`; list screens use 26 px rows from y=30,
+  highlight = picture 109, separator 133, title bar 107. Event flags, not widgets:
+  `0x3066950` set / `0x306696c` test-and-clear / `0x3066992` clear / `0x30669b0` test.
+- Home menu: section 17 data `0x302302c`, six `{u16 id, u16 icon, u16 string}`, count hard-coded in
+  eight Thumb immediates (`menus.py`). Music menu: section 18 data `0x3023010`, `{picture, string}`.
+- font12: 8,439-entry map, 424 glyphs of 24 bytes from `0x55dd8a`, then one advance byte per glyph
+  at `0x56054a` (the player clips to it; the importer writes rightmost ink + 1).
+- Strings: `strtbl.py`; `nwe39x strings export` for ids (en 110 Settings, 111 Music Settings,
+  128 Photo Settings, 135 FM Radio Settings, 142 Sleep Timer Settings, 148 Common Settings,
+  167 Language Settings).
+- SCSI: `FC 00 04 "dbmn"` = START FW UPDATE, `FC 00 20 "dbmn"` + 0x80 in = DEVINFO
+  (`flash.py`, Windows pass-through, no elevation). The handler is in the NAND loader, not stage 3.
+
+## Open items, in the order I would take them
+
+1. **Settings menu table** (in progress, not found). The generic list drawer in section 0
+   (`0x305cce6`) takes a u16 array `[title, row ids...]` in r5 from its caller. The Settings
+   array is not in any section's code or data as u16, u8, at any constant offset, or as
+   immediates near string calls; exhaustive scans are in the session notes below. Next: find the
+   callers of `0x305cce6` with Xrefs, read how each builds r5, and follow the Settings one (it may
+   be built on the stack from a packed table or by a loop). Deliverable: `nwe39x menu` grows a
+   `settings` target, same patch mechanism as `menus.py`.
+2. **Volume follow-up on the device**: does anything still pull the volume down after a long
+   session or a headphone replug? If yes, enable the commented section 34 line in
+   `mods/volume-limit/patches.tsv`. Also: what writes settings `+0x4a`.
+3. **Fonts**: `fonts from-ttf --advance N` to keep a monospace rhythm; a BDF importer; map the
+   CJK half of font12 (after the width table, from `0x5606f2`).
+4. **Whole-language string import** (one TSV per language) in `strtbl.py`.
+5. Later: EQ tables in section 35 (`max_DbGain` ladder at `0x307890e`), the demo-mode key
+   sequence (RAM `0x100`, populated outside the image), FM section.
+
+## Session notes worth keeping
+
+- Gemini's earlier analysis got the font cause wrong (it was the width table, not rasterisation)
+  and the SCSI opcode wrong (`FC 20` is DEVINFO, `FC 04` reboots); don't trust its conclusions
+  without checking bytes.
+- Pictures 087-091 (test patterns) are never drawn; there is no factory test mode in stage 3.
+- The user prefers short, factual replies, likes to see a preview image before flashing, and
+  tests on the device between steps. Flash only after `diff` is clean.

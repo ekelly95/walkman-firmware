@@ -256,6 +256,15 @@ Pictures are drawn by index after all, through two section 0 routines (names now
   (`0x306c882` .. `0x306c922`). `nwe39x menu hide FM` rewrites the table, those constants and the
   kept icons' slots; verified on the player as 1.13.
 
+## Settings menu table: not found yet (2026-10-13)
+
+The generic list drawer in section 0 (`0x305cce6`) takes a u16 array `[title, row string ids...]`
+through r5 from its caller (rows: `ldrh r0, [r5 + 2*row]`, see section 28 `0x3070ec4` for the same
+shape). Looked for the Settings array (110; 111, 128, 135, 142, 148, 167) in every section's code
+and data as u16 and u8, at any constant offset, by its spacing pattern, and as immediates near
+the string routines: nothing but codec coefficients. So it is assembled at runtime. Next: Xrefs
+`callers@0x305cce6`, read how each caller fills r5, follow the one that ends up titled 110.
+
 ## Not known yet
 - Brick recovery: Rockbox `utils/rknanoutils/rkload` loads code over USB in the RKnano boot-ROM
   mode. How to enter that mode on this player is unknown (possibly a test point inside).
