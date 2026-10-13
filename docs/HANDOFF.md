@@ -100,15 +100,12 @@ changes unless `--allow-code-patches`.
    pixel-identical to the TTF sheet on the player); font12's CJK part is mapped (`--font 12` /
    `12zh`, ranges kana/cjk/hangul/...; see NOTES). The player keeps Terminus regular, ink + 1.
 4. **Whole-language string import** (one TSV per language) in `strtbl.py`.
-5. **Gold letter-jump highlight**: in the song list's letter jump, the highlighted letter stays
-   gold under every theme (seen on the player with theme-ice 1.21, 2026-10-13; none of the 234
-   pictures in that build has more than 20 gold pixels). It is text drawn with a colour set in
-   code. Not found yet: `0x3053ef8` -> `0x3062438` only loads glyph rows from NAND (no colour);
-   a scan for gold RGB565
-   immediates found only sample rates (`0xbb80` 48000, `0xac44` 44100) and a JPEG APP1 marker
-   (`0xffe1`, section 14's EXIF parser). Next: find the letter-jump screen (Ghidra, from the music
-   list code) and the text-draw routine its colour reaches. A patch would make themes code
-   patches (`--allow-code-patches`), so weigh that before adding it to presets.
+5. **Gold letter-jump highlight**: found, not patched. Section 20 `0x306f234`
+   `movw r0, #0xf5e0` (`4ff2e050`) sets the text colour (RAM `0x551c`) for the current letter
+   of the song list's letter jump; NOTES "Text colour" has the encodings for each preset.
+   `mods/letter-jump-color` carries the patch (matrix green `0x47a6`, `44f2a670`) as an
+   opt-in mod, so the themes stay picture-only; a build that includes it needs
+   `--allow-code-patches`.
 6. Later: EQ tables in section 35 (`max_DbGain` ladder at `0x307890e`), the demo-mode key
    sequence (RAM `0x100`, populated outside the image), FM section.
 
