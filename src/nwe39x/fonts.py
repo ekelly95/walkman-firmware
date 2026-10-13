@@ -13,7 +13,9 @@ glyph needs its width written too. That covers ASCII, Latin, Cyrillic and Greek;
 Hangul parts of font0 follow the width table and are not decoded yet.
 
 Sheets are PNGs with one glyph per cell; the font and code points are stored in the PNG's text
-metadata so an edited sheet imports back to the same characters.
+metadata so an edited sheet imports back to the same characters. An optional "advance" in the
+metadata gives every glyph of the sheet that advance width instead of one computed from its ink
+(`fonts from-ttf --advance N`, for a monospace rhythm).
 """
 
 from __future__ import annotations
@@ -127,10 +129,10 @@ class Font:
                     img.putpixel((x, y), INK)
         return img
 
-    def set_image(self, cp: int, img: Image.Image) -> bool:
+    def set_image(self, cp: int, img: Image.Image, advance: int | None = None) -> bool:
         """Write a glyph from a size x size image (pixels >= 128 are ink). Returns False if unchanged.
-        The advance width is recomputed from the ink the way Sony's are (font16: rightmost + 2,
-        font12: rightmost + 1); a glyph with no ink keeps its width."""
+        The advance width is `advance` if given, else recomputed from the ink the way Sony's are
+        (font16: rightmost + 2, font12: rightmost + 1); a glyph with no ink keeps its width."""
         if img.size != (self.size, self.size):
             raise FirmwareError(f"U+{cp:04X}: glyph must be {self.size}x{self.size}")
         off = self.offset(cp)
@@ -138,15 +140,25 @@ class Font:
             raise FirmwareError(f"{self.name} has no glyph for U+{cp:04X}")
         px = img.convert("L").load()
         rows = [sum(1 << (15 - x) for x in range(self.size) if px[x, y] >= 128) for y in range(self.size)]
-        if rows == self.rows(cp):
+        if advance is not None and not 1 <= advance <= self.size:
+            raise FirmwareError(f"advance {advance} is outside 1-{self.size} for {self.name}")
+        if rows == self.rows(cp) and advance is None:
+            return False  # untouched glyphs keep Sony's width, even where it is not ink + 1
+        right = self._rightmost_ink(rows, self.size)
+        if advance is not None:
+            width = advance
+        elif right is None:
+            width = self.width(cp)
+        elif self.name == "font16":
+            width = min(right + 2, 16)
+        else:
+            width = right + 1
+        if rows == self.rows(cp) and width == self.width(cp):
             return False
         data = b"".join(r.to_bytes(2, "big") for r in rows)
-        right = self._rightmost_ink(rows, self.size)
         if self.name == "font16":
-            width = right + 2 if right is not None else self.width(cp)
-            data += bytes([0x80 | min(width, 16)])
+            data += bytes([0x80 | width])
         else:
-            width = right + 1 if right is not None else self.width(cp)
             self.fw.write(self.widths_offset + self.glyph(cp), bytes([width]))
         self.fw.write(off, data)
         return True
@@ -189,7 +201,7 @@ def import_sheet(fw: Firmware, path: Path) -> list[int]:
     changed = []
     for i, cp in enumerate(meta["cps"]):
         x, y = 1 + (i % cols) * cell, 1 + (i // cols) * cell
-        if font.set_image(cp, img.crop((x, y, x + font.size, y + font.size))):
+        if font.set_image(cp, img.crop((x, y, x + font.size, y + font.size)), meta.get("advance")):
             changed.append(cp)
     return changed
 
@@ -201,10 +213,13 @@ def baseline(font: Font) -> int:
 
 
 def sheet_from_ttf(font: Font, ttf: Path, cps: list[int], path: Path, size: int | None = None,
-                   cols: int = 16, base: int | None = None) -> int:
+                   cols: int = 16, base: int | None = None, advance: int | None = None) -> int:
     """Render a TrueType/OpenType font into a glyph sheet (1-bit, no anti-aliasing) on the
     firmware font's baseline (or `base`, a row index: lower it to make room for descenders).
+    `advance` fixes every glyph's advance width (monospace) instead of rightmost ink + 1.
     Import it with `build --fonts` / a mod's fonts/ folder."""
+    if advance is not None and not 1 <= advance <= font.size:
+        raise FirmwareError(f"advance {advance} is outside 1-{font.size} for {font.name}")
     from PIL import ImageDraw, ImageFont
     cps = [cp for cp in cps if font.has(cp)]
     face = ImageFont.truetype(str(ttf), size or font.size - 3)
@@ -219,7 +234,10 @@ def sheet_from_ttf(font: Font, ttf: Path, cps: list[int], path: Path, size: int 
         draw.text((1, base), chr(cp), font=face, fill=INK, anchor="ls")
         sheet.paste(glyph, (1 + (i % cols) * cell, 1 + (i // cols) * cell))
     meta = PngInfo()
-    meta.add_text(META_KEY, json.dumps({"font": font.name, "cols": cols, "cps": cps, "source": Path(ttf).name}))
+    info = {"font": font.name, "cols": cols, "cps": cps, "source": Path(ttf).name}
+    if advance is not None:
+        info["advance"] = advance
+    meta.add_text(META_KEY, json.dumps(info))
     sheet.save(path, pnginfo=meta)
     return len(cps)
 

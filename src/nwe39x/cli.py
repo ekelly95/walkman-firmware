@@ -175,7 +175,8 @@ def cmd_fonts_export(args):
 def cmd_fonts_from_ttf(args):
     fw = Firmware.load(stock_image(args))
     font = fonts.Font.by_name(fw, args.font)
-    n = fonts.sheet_from_ttf(font, Path(args.ttf), fonts.parse_range(args.range), Path(args.out), args.size, base=args.baseline)
+    n = fonts.sheet_from_ttf(font, Path(args.ttf), fonts.parse_range(args.range), Path(args.out), args.size,
+                             base=args.baseline, advance=args.advance)
     print(f"wrote {n} glyphs from {Path(args.ttf).name} to {args.out}")
 
 
@@ -342,6 +343,7 @@ def main(argv: list[str] | None = None):
     p.add_argument("--range", default="ascii")
     p.add_argument("--size", type=int, help="pixel size (default: cell size - 3)")
     p.add_argument("--baseline", type=int, help="baseline row (default: where the firmware's H sits; lower it for deeper descenders)")
+    p.add_argument("--advance", type=int, help="advance width for every glyph, space included (monospace); default: rightmost ink + 1")
     image_args(p)
     p.set_defaults(func=cmd_fonts_from_ttf)
     p = fnt.add_parser("preview", help="render text with the firmware's glyphs")

@@ -1,8 +1,15 @@
+import json
+from pathlib import Path
+
 import pytest
 from PIL import Image
 
 from nwe39x import fonts
 from nwe39x.rknanofw import Firmware, FirmwareError
+
+REPO = Path(__file__).resolve().parent.parent
+TTFS = [*sorted(REPO.glob("reference/terminus/*/TerminusTTF-*.ttf")), Path("C:/Windows/Fonts/consola.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf")]
 
 
 def test_font16_glyph_and_width(image_bytes):
@@ -93,3 +100,28 @@ def test_stock_fonts(stock_bytes, tmp_path):
         fonts.export_sheet(f, fonts.parse_range("ascii") + fonts.parse_range("cyrillic"), tmp_path / f"{f.name}.png")
         assert fonts.import_sheet(fw, tmp_path / f"{f.name}.png") == []
     assert bytes(fw.buf) == stock_bytes
+
+
+@pytest.mark.parametrize("name", ["16", "12"])
+def test_advance_applies_to_every_glyph(image_bytes, tmp_path, name):
+    fw = Firmware.from_bytes(image_bytes)
+    f = fonts.Font.by_name(fw, name)
+    ttf = next((t for t in TTFS if t.exists()), None)
+    if ttf is None:
+        pytest.skip("no TrueType font on this machine")
+    cps = [ord(" "), ord("i"), ord("M")]
+    fonts.sheet_from_ttf(f, ttf, cps, tmp_path / "m.png", advance=6)
+    assert json.loads(Image.open(tmp_path / "m.png").text[fonts.META_KEY])["advance"] == 6
+    fonts.import_sheet(fw, tmp_path / "m.png")
+    assert [f.width(cp) for cp in cps] == [6, 6, 6]
+    with pytest.raises(FirmwareError):
+        fonts.sheet_from_ttf(f, ttf, cps, tmp_path / "x.png", advance=f.size + 1)
+
+
+def test_advance_alone_rewrites_width(image_bytes):
+    fw = Firmware.from_bytes(image_bytes)
+    f = fonts.Font.font12(fw)
+    img = f.image(ord("A"))
+    assert not f.set_image(ord("A"), img)  # same rows, no advance: untouched
+    assert f.set_image(ord("A"), img, advance=6) and f.width(ord("A")) == 6
+    assert not f.set_image(ord("A"), img, advance=6)
