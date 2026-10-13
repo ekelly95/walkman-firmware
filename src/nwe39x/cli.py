@@ -10,7 +10,8 @@
   nwe39x fonts export SHEET.png            glyph sheet (--font 16|12, --range ascii|cyrillic|...)
   nwe39x fonts preview "text" OUT.png      render text with the firmware's own glyphs
   nwe39x bootscreen PHOTO OUT.png          make a 128x160 boot picture from a photo
-  nwe39x theme mono|hue DIR                recolour every UI picture into DIR (--hue DEG, --sheet PNG)
+  nwe39x theme NAME DIR                    recolour every UI picture into DIR (presets: mono, ice, purple,
+                                           amber, ... ; or hue --hue DEG; --sheet PNG for a preview)
   nwe39x build --mod DIR                   patched updater in out/updater from DIR/images/*.png,
                                            DIR/strings.tsv, DIR/fonts/*.png and DIR/patches.tsv
                                            (version from the player)
@@ -342,7 +343,8 @@ def main(argv: list[str] | None = None):
     p.set_defaults(func=cmd_fonts_preview)
 
     p = sub.add_parser("theme", help="recolour the UI pictures into a folder for `build --images`")
-    p.add_argument("theme", choices=["mono", "hue"], help="mono: grey accents (reds kept); hue: rotate colours")
+    p.add_argument("theme", choices=["hue", *themes.PRESETS], help="hue: rotate colours by --hue DEG; or a preset: "
+                   + "; ".join(f"{k}: {v[0]}" for k, v in themes.PRESETS.items()))
     p.add_argument("dir")
     p.add_argument("--hue", type=float, help="degrees for the hue theme (gold is ~40; 200 ice blue, 290 purple)")
     p.add_argument("--sheet", help="also write a contact sheet PNG of the whole themed set")

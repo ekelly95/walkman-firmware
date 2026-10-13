@@ -38,14 +38,59 @@ def hue_shift(img: Image.Image, degrees: float) -> Image.Image:
     return Image.merge("HSV", (h, s, v)).convert("RGB")
 
 
+def saturate(img: Image.Image, factor: float) -> Image.Image:
+    h, s, v = img.convert("HSV").split()
+    s = s.point(lambda x: min(255, round(x * factor)))
+    return Image.merge("HSV", (h, s, v)).convert("RGB")
+
+
+def brighten(img: Image.Image, factor: float) -> Image.Image:
+    h, s, v = img.convert("HSV").split()
+    v = v.point(lambda x: min(255, round(x * factor)))
+    return Image.merge("HSV", (h, s, v)).convert("RGB")
+
+
+def tint(img: Image.Image, hue_deg: float, sat: float = 0.6) -> Image.Image:
+    """Everything coloured becomes one hue (a phosphor look); greys stay grey."""
+    h, s, v = img.convert("HSV").split()
+    h = h.point(lambda _: round(hue_deg * 255 / 360) % 256)
+    s = s.point(lambda x: min(255, round(x * sat)))
+    return Image.merge("HSV", (h, s, v)).convert("RGB")
+
+
+def accent(img: Image.Image, hue_deg: float) -> Image.Image:
+    """Move only the gold accent (hue 15-70 degrees) to another hue; the red alert rings and the
+    blue boot rings keep their colours."""
+    h, s, v = img.convert("HSV").split()
+    lo, hi = round(15 * 255 / 360), round(70 * 255 / 360)
+    gold = h.point(lambda x: 255 if lo <= x <= hi else 0)
+    target = h.point(lambda _: round(hue_deg * 255 / 360) % 256)
+    return Image.merge("HSV", (Image.composite(target, h, gold), s, v)).convert("RGB")
+
+
+# Stock gold sits at about hue 40. Presets move it, or treat the whole palette.
+PRESETS = {
+    "mono": ("grey accents, reds kept for alerts", mono),
+    "ice": ("gold accent -> ice blue", lambda im: accent(im, 195)),
+    "sony-blue": ("gold accent -> the classic Walkman blue", lambda im: accent(im, 220)),
+    "purple": ("gold accent -> violet", lambda im: accent(im, 275)),
+    "mint": ("gold accent -> mint green", lambda im: accent(im, 150)),
+    "rose": ("gold accent -> pink", lambda im: accent(im, 330)),
+    "amber": ("everything amber, like an old phosphor display", lambda im: tint(im, 35)),
+    "matrix": ("everything green phosphor", lambda im: tint(im, 115, 0.8)),
+    "neon": ("stock colours, saturated and brighter", lambda im: brighten(saturate(im, 1.6), 1.15)),
+    "ghost": ("mono, dimmed: accents barely there", lambda im: brighten(mono(im), 0.65)),
+}
+
+
 def transform(name: str, hue: float | None = None):
-    if name == "mono":
-        return mono
     if name == "hue":
         if hue is None:
             raise FirmwareError("hue theme needs --hue DEG")
         return lambda img: hue_shift(img, hue)
-    raise FirmwareError(f"unknown theme {name!r}; use mono or hue")
+    if name in PRESETS:
+        return PRESETS[name][1]
+    raise FirmwareError(f"unknown theme {name!r}; use hue or one of {', '.join(PRESETS)}")
 
 
 def generate(fw: Firmware, outdir: Path, fn, skip: set[int] = ARTWORK, sheet: Path | None = None) -> list[int]:

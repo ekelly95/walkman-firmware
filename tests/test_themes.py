@@ -33,3 +33,23 @@ def test_generate_writes_only_changed_pictures(image_bytes, tmp_path):
     assert changed == [0]
     assert [p.name for p in tmp_path.iterdir()] == [imageres.pictures(fw)[0].filename]
     assert imageres.import_dir(fw, tmp_path) == [0]
+
+
+def test_accent_moves_gold_only():
+    img = Image.new("RGB", (3, 1))
+    img.putpixel((0, 0), (255, 170, 0))   # gold accent
+    img.putpixel((1, 0), (220, 20, 20))   # red alert
+    img.putpixel((2, 0), (20, 40, 220))   # blue ring
+    out = themes.accent(img, 275)
+    r, g, b = out.getpixel((0, 0))
+    assert b > 200 and r > 100 and g < 60      # violet
+    r, g, b = out.getpixel((1, 0))
+    assert r > 200 and g < 40 and b < 40       # still red
+    r, g, b = out.getpixel((2, 0))
+    assert b > 200 and r < 40                  # still blue
+
+
+def test_every_preset_runs():
+    img = Image.new("RGB", (4, 4), (255, 170, 0))
+    for name, (_, fn) in themes.PRESETS.items():
+        assert fn(img).size == (4, 4), name
