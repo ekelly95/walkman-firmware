@@ -12,9 +12,9 @@ Python 3.12, `uv`, package `nwe39x` in `src/`, CLI `uv run nwe39x ...`. Tests:
 `uv run pytest -q` (80 pass). **NOTES.md is the knowledge base**:
 every reverse-engineering fact, with addresses, lives there; read it first and keep it current.
 
-The player (one unit, serial in `nwe39x devinfo`) is on **1.20 = `mods/my-walkman`**: dark
-theme, Terminus 12 in the menu font, matching boot/power-off screens, volume cap off, FM Radio
-dropped from the home menu and from Settings. Sony's stock image is 1.01; our versions only count upward so Unit
+The player (one unit, serial in `nwe39x devinfo`) is on **1.22 = `mods/my-walkman`**: matrix
+theme (everything green, alert rings included), Terminus 12 in the menu font, matching
+boot/power-off screens, volume cap off, FM Radio dropped from the home menu and from Settings. Sony's stock image is 1.01; our versions only count upward so Unit
 Information tells builds apart (the installer itself never checks versions).
 
 ## Daily commands
@@ -100,7 +100,16 @@ changes unless `--allow-code-patches`.
    pixel-identical to the TTF sheet on the player); font12's CJK part is mapped (`--font 12` /
    `12zh`, ranges kana/cjk/hangul/...; see NOTES). The player keeps Terminus regular, ink + 1.
 4. **Whole-language string import** (one TSV per language) in `strtbl.py`.
-5. Later: EQ tables in section 35 (`max_DbGain` ladder at `0x307890e`), the demo-mode key
+5. **Gold letter-jump highlight**: in the song list's letter jump, the highlighted letter stays
+   gold under every theme (seen on the player with theme-ice 1.21, 2026-10-13; none of the 234
+   pictures in that build has more than 20 gold pixels). It is text drawn with a colour set in
+   code. Not found yet: `0x3053ef8` -> `0x3062438` only loads glyph rows from NAND (no colour);
+   a scan for gold RGB565
+   immediates found only sample rates (`0xbb80` 48000, `0xac44` 44100) and a JPEG APP1 marker
+   (`0xffe1`, section 14's EXIF parser). Next: find the letter-jump screen (Ghidra, from the music
+   list code) and the text-draw routine its colour reaches. A patch would make themes code
+   patches (`--allow-code-patches`), so weigh that before adding it to presets.
+6. Later: EQ tables in section 35 (`max_DbGain` ladder at `0x307890e`), the demo-mode key
    sequence (RAM `0x100`, populated outside the image), FM section.
 
 ## Session notes worth keeping
