@@ -201,13 +201,14 @@ def baseline(font: Font) -> int:
 
 
 def sheet_from_ttf(font: Font, ttf: Path, cps: list[int], path: Path, size: int | None = None,
-                   cols: int = 16) -> int:
+                   cols: int = 16, base: int | None = None) -> int:
     """Render a TrueType/OpenType font into a glyph sheet (1-bit, no anti-aliasing) on the
-    firmware font's baseline. Import it with `build --fonts` / a mod's fonts/ folder."""
+    firmware font's baseline (or `base`, a row index: lower it to make room for descenders).
+    Import it with `build --fonts` / a mod's fonts/ folder."""
     from PIL import ImageDraw, ImageFont
     cps = [cp for cp in cps if font.has(cp)]
     face = ImageFont.truetype(str(ttf), size or font.size - 3)
-    base = baseline(font)
+    base = baseline(font) if base is None else base
     cell = font.size + 1
     rows = (len(cps) + cols - 1) // cols
     sheet = Image.new("L", (cols * cell + 1, rows * cell + 1), GRID)
