@@ -7,6 +7,6 @@ unreachable. Regenerate after changing the firmware version, and stack it on any
 ```
 nwe39x menu show
 nwe39x menu hide FM -o mods/no-fm/patches.tsv
-nwe39x build --mod mods/cat-lovers --patches mods/volume-limit/patches.tsv --patches mods/no-fm/patches.tsv -o out/combo
+nwe39x build --patches mods/volume-limit/patches.tsv --patches mods/no-fm/patches.tsv -o out/combo
 nwe39x diff out/combo/Data/Device/RKNANOFW.IMG --patches mods/volume-limit/patches.tsv --patches mods/no-fm/patches.tsv
 ```

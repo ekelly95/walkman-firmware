@@ -5,6 +5,6 @@ and low-battery rings stay red. The pictures are generated, not committed:
 
 ```
 nwe39x theme mono mods/theme-dark/images --sheet work/theme_dark_sheet.png
-nwe39x build --mod mods/cat-lovers --images mods/theme-dark/images --fonts mods/font-test/fonts --patches mods/volume-limit/patches.tsv -o out/combo
+nwe39x build --images mods/theme-dark/images --patches mods/volume-limit/patches.tsv --patches mods/no-fm/patches.tsv -o out/combo
 nwe39x flash --updater out/combo
 ```

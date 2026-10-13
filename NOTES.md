@@ -56,7 +56,7 @@ and then sends a vendor SCSI command to make the player reboot into the update. 
 compares versions (`VERSION_EQUAL`, `VERSION_OLDER`, `VERSION_NEWER`, `VERSION_CHECK_PASS`;
 "Firmware version is not correct. ( pc:"%s" != device:"%s" )").
 
-## Flashing (worked 2026-10-12, "For Cat Lovers, By Cat Lovers" boot screen)
+## Flashing (worked 2026-10-12, with a custom boot screen as the first test mod)
 
 - Copying `RKNANOFW.IMG` to the player's root and power-cycling does nothing: the player
   never reads the file on its own (it was still there afterwards).
@@ -79,11 +79,11 @@ compares versions (`VERSION_EQUAL`, `VERSION_OLDER`, `VERSION_NEWER`, `VERSION_C
   it unmount (player rebooting into the installer), then remount 4 s later reporting **1.03** with
   `RKNANOFW.IMG` consumed. The install worked; the tool's final check failed.
 - Restoring stock over a mod works (cat 1.02 -> stock 1.03).
-- An earlier attempt (cat-lovers mod as 1.03 over 1.02) also said "failed" and did NOT install
+- An earlier attempt (the test mod as 1.03 over 1.02) also said "failed" and did NOT install
   (still 1.02, no file left on the drive). Not yet explained; the drive was not being polled then.
-- Cat-lovers mod as 1.04, polled twice a second from launch: the tool quit after 10 s without ever
-  copying the image. Same build again with **nothing touching the drive**: installed (cat, Meowsic,
-  nap-time power-off screen), and the tool still ended with the "failed" message.
+- The test mod as 1.04, polled twice a second from launch: the tool quit after 10 s without ever
+  copying the image. Same build again with **nothing touching the drive**: installed (custom boot screen, strings
+  and power-off screen), and the tool still ended with the "failed" message.
 - Conclusions: (1) other processes reading the drive make the tool fail before it copies
   (probably it needs exclusive access to send its SCSI command); (2) the closing "failed" message
   is the tool's own post-install check and appears even on clean successful installs.
