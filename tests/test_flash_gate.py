@@ -103,6 +103,11 @@ def test_confirmation(env, monkeypatch):
     monkeypatch.setattr("builtins.input", lambda prompt="": "yes")
     with pytest.raises(SystemExit, match="not confirmed"):
         run("--updater", mod)
+    def eof(prompt=""):
+        raise EOFError
+    monkeypatch.setattr("builtins.input", eof)  # stdin at end, e.g. NUL, which Windows calls a terminal
+    with pytest.raises(SystemExit, match="not confirmed"):
+        run("--updater", mod)
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
     with pytest.raises(SystemExit, match="typed confirmation"):
         run("--updater", mod)

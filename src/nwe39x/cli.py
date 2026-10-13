@@ -308,7 +308,11 @@ def cmd_flash(args):
     if not args.yes:
         if not sys.stdin.isatty():
             raise FirmwareError("flash asks for a typed confirmation; run it in a terminal, or pass --yes")
-        if input('type "flash" to install: ').strip() != "flash":
+        try:  # Windows reports NUL as a terminal, so end of input has to count as "no" too
+            answer = input('type "flash" to install: ').strip()
+        except (EOFError, KeyboardInterrupt):
+            answer = ""
+        if answer != "flash":
             raise FirmwareError("not confirmed; nothing was sent to the player")
     version = flash.flash(img, p.root, wait=not args.no_wait)
     if version:
