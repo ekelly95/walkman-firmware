@@ -83,8 +83,9 @@ be `file` for an absolute offset. Old bytes must match or the build refuses. `bu
 2. **Volume follow-up on the device**: does anything still pull the volume down after a long
    session or a headphone replug? If yes, enable the commented section 34 line in
    `mods/volume-limit/patches.tsv`. Also: what writes settings `+0x4a`.
-3. **Fonts**: `fonts from-ttf --advance N` to keep a monospace rhythm; a BDF importer; map the
-   CJK half of font12 (after the width table, from `0x5606f2`).
+3. **Fonts**: done. `fonts from-ttf --advance N`; `fonts from-bdf` (Terminus BDF regular imports
+   pixel-identical to the TTF sheet on the player); font12's CJK part is mapped (`--font 12` /
+   `12zh`, ranges kana/cjk/hangul/...; see NOTES). The player keeps Terminus regular, ink + 1.
 4. **Whole-language string import** (one TSV per language) in `strtbl.py`.
 5. Later: EQ tables in section 35 (`max_DbGain` ladder at `0x307890e`), the demo-mode key
    sequence (RAM `0x100`, populated outside the image), FM section.

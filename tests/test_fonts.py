@@ -198,3 +198,38 @@ def test_sheet_from_bdf_reports_clipping(image_bytes, tmp_path):
     (tmp_path / "t.bdf").write_text(BDF)
     _, clipped = fonts.sheet_from_bdf(fonts.Font.font12(fw), tmp_path / "t.bdf", [65, 103], tmp_path / "t.png", base=11)
     assert clipped == [103]  # g's descender falls below row 11
+
+
+def test_stock_font12_cjk(stock_bytes, tmp_path):
+    fw = Firmware.from_bytes(stock_bytes)
+    f, zh = fonts.Font.font12(fw), fonts.Font.by_name(fw, "12zh")
+    assert len([v for v in f.cjk if v]) == 31682
+    for cp in (0x4E00, 0x3042, 0xAC00, 0xD55C, 0x2460, 0xFF01):
+        assert f.has(cp) and f.is_cjk(cp) and f.width(cp) == 12
+    assert f.width(0xFF71) == 6  # halfwidth katakana
+    assert not f.is_cjk(ord("A")) and not f.is_cjk(0x0410)  # the Latin table wins where both have it
+    assert f.rows(0x0410) == zh.rows(0x0410)
+    assert f.rows(0x76F4) != zh.rows(0x76F4)  # 直: the banks differ in 7,262 glyphs
+    assert f.offset(0x00A1) is not None and f.is_cjk(0x00A1) is False  # ¡ is in the Latin table
+    for font in (f, zh):
+        fonts.export_sheet(font, fonts.parse_range("kana"), tmp_path / f"{font.name}.png")
+        assert fonts.import_sheet(fw, tmp_path / f"{font.name}.png") == []
+    assert bytes(fw.buf) == stock_bytes
+
+
+def test_cjk_import_writes_rows_only(stock_bytes):
+    fw = Firmware.from_bytes(stock_bytes)
+    f = fonts.Font.font12(fw)
+    img = Image.new("L", (12, 12), 0)
+    img.putpixel((3, 3), 255)
+    assert f.set_image(0x3042, img, advance=5)
+    off = f.offset(0x3042)
+    diff = [i for i in range(len(stock_bytes)) if fw.buf[i] != stock_bytes[i]]
+    assert diff and all(off <= i < off + 24 for i in diff) and f.width(0x3042) == 12
+
+
+def test_synthetic_font12_has_no_cjk(image_bytes):
+    fw = Firmware.from_bytes(image_bytes)
+    assert fonts.Font.font12(fw).cjk == () and not fonts.Font.font12(fw).has(0x4E00)
+    with pytest.raises(FirmwareError):
+        fonts.Font.by_name(fw, "12zh")

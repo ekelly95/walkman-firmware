@@ -96,7 +96,7 @@ compares versions (`VERSION_EQUAL`, `VERSION_OLDER`, `VERSION_NEWER`, `VERSION_C
   changes), so the tool's post-install version check must use the capability XML or a vendor
   SCSI command. Find out in M5 (`WmFwUpdater.dll`, USB capture).
 
-## font12 advance widths (2026-10-12, found while checking the font-test photos; not yet in fonts.py)
+## font12 advance widths (2026-10-12, found while checking the font-test photos; in fonts.py since)
 
 Why Consolas lost its `l` and `i` and clipped `o`/`b` on the player: font0 keeps each glyph's
 advance in a **separate 1-byte-per-glyph table after the bitmaps**, which the sheet importer never
@@ -109,6 +109,28 @@ earlier than fonts.py assumes, so every glyph is really one row lower: row 0 and
 **424 width bytes at `0x56054a`** (`width[glyph]`, 2-12; rightmost ink + 1 for 406 of 418 ASCII/Latin
 glyphs; space = 5), then the CJK structures from `0x5606f2`. Fix: on font12 import, write
 `width[glyph] = rightmost ink + 1`; read it back for `preview`/`width()`; shift the glyph base by -2.
+
+## font12 CJK part (2026-10-13; in fonts.py as `font12` / `font12zh`)
+
+After font0's width table (blob `0x559b9c`, offsets relative to it):
+- `+0x6b56` (`0x5606f2`): **bank 1**, 31,682 glyph records of 24 bytes (same row format as the
+  Latin glyphs). `+0xc0586` (`0x61a122`): **bank 2**, the same 31,682 glyphs in the same order. They
+  differ in 7,262 records: Chinese Han forms (直, 骨), and some sit a row lower (一).
+- `+0x179fb6` (`0x6d3b52`): u16 index of all 65,536 code points, 0 = no glyph, else record + 1,
+  strictly increasing with the code point. It covers 31,682 characters: Latin-1/Greek/Cyrillic
+  symbols from legacy CJK charsets, U+2010-U+2FFB, 526 of U+3000-U+33FF (punctuation, kana, ...),
+  all of CJK Extension A (6,582) and of U+4E00-U+9FA5 (20,902), the 2,350 KS X 1001 Hangul
+  syllables (of 11,172; font16 has them all), 173 private-use characters U+E766-U+E864,
+  compatibility ideographs, and full-width forms to U+FFE6.
+- Then 155,694 bytes, almost all zero (455 non-zero), not decoded.
+
+Readers in section 0: `0x3053fac` index, `0x3053f84` bank 1 glyph, `0x3053f5c` bank 2 glyph
+(alongside `0x3053f40` Latin table, `0x3053ef8` Latin glyph, `0x3053f20` Latin width). Lookup
+`0x30540ac(sel, &cp, out, ...)`: Latin table first (U+0020-U+20F6, after mapping a few
+punctuation code points), then Thai checks, then the CJK index; a missing CJK glyph draws record
+`0x23d`. `sel` = 0 when settings `+0x4c` (UI language) is 11 or 12 (Chinese) selects bank 2, else
+bank 1 (`0x3061464`). CJK glyphs advance 12, halfwidth katakana U+FF61-U+FF9F 6; there is no width
+table for them.
 
 ## Volume limit (2026-10-12, from disassembly of stage 3 v1.01; patches not yet tested on a player)
 

@@ -9,8 +9,16 @@ font0, "font12": 12x12 pixels. A table of 8,439 u16 values maps code points U+00
 glyph numbers (0xFFFF = no glyph); then 424 glyph records of 24 bytes (12 rows of 2 bytes, left 12
 bits used, rows 0 and 11 blank in Sony's glyphs); then one advance-width byte per glyph (Sony's
 are rightmost ink + 1; space is 5). The player clips each glyph to its advance, so a replaced
-glyph needs its width written too. That covers ASCII, Latin, Cyrillic and Greek; the CJK and
-Hangul parts of font0 follow the width table and are not decoded yet.
+glyph needs its width written too. That covers ASCII, Latin, Cyrillic and Greek.
+
+After the width table comes font12's CJK part: two banks of 31,682 glyph records (24 bytes, same
+row format), then a u16 index of all 65,536 code points (0 = no glyph, else record number + 1):
+symbols, kana, CJK U+4E00-U+9FA5 and compatibility ideographs, Hangul syllables, full-width forms.
+Stage 3 reads it at fixed offsets in section 0 (index `0x3053fac`, bank 1 `0x3053f84`, bank 2
+`0x3053f5c`); `0x30540ac` looks a character up in the Latin table first and the CJK index second,
+and uses bank 2 when the UI language is Chinese (settings `+0x4c` = 11 or 12), bank 1 otherwise
+(the banks differ in 7,262 Han glyph shapes). CJK glyphs have no width table: they advance 12,
+halfwidth katakana (U+FF61-U+FF9F) 6. `font12zh` is font12 with bank 2.
 
 Sheets are PNGs with one glyph per cell; the font and code points are stored in the PNG's text
 metadata so an edited sheet imports back to the same characters. An optional "advance" in the
@@ -37,21 +45,32 @@ RANGES = {
     "latin-ext": range(0x100, 0x180),
     "cyrillic": range(0x400, 0x460),
     "greek": range(0x370, 0x400),
+    "cjk-symbols": range(0x3000, 0x3040),
+    "kana": range(0x3040, 0x3100),
+    "cjk": range(0x4E00, 0x9FA6),
+    "hangul": range(0xAC00, 0xD7A4),
+    "fullwidth": range(0xFF00, 0xFFF0),
 }
 META_KEY = "nwe39x-font"
 INK, PAPER, GRID = 255, 0, 64
 FONT12_TABLE = 8439  # u16 entries, U+0020..U+20F6
 FONT12_RECORD = 24
+# font12's CJK part, as offsets in the blob (the constants in section 0's readers)
+CJK_BANKS = (0x6B56, 0xC0586)
+CJK_INDEX = 0x179FB6
+CJK_LATIN_GLYPHS = 424  # the layout these offsets assume
 
 
 @dataclass
 class Font:
     fw: Firmware
-    name: str          # "font16" or "font12"
+    name: str          # "font16", "font12" or "font12zh"
     size: int          # glyph cell, square
     blob_offset: int
     blob_size: int
     table: tuple[int, ...] = ()
+    cjk: tuple[int, ...] = ()  # font12: the CJK index (record number + 1, 0 = none)
+    bank: int = 0              # font12: 0 = bank 1, 1 = bank 2 (Chinese UI)
 
     @classmethod
     def font16(cls, fw: Firmware) -> Font:
@@ -59,10 +78,16 @@ class Font:
         return cls(fw, "font16", 16, b.offset, b.size)
 
     @classmethod
-    def font12(cls, fw: Firmware) -> Font:
+    def font12(cls, fw: Firmware, bank: int = 0) -> Font:
         b = fw.blob("font", 0)
         table = struct.unpack_from(f"<{FONT12_TABLE}H", fw.buf, b.offset)
-        return cls(fw, "font12", 12, b.offset, b.size, table)
+        f = cls(fw, "font12zh" if bank else "font12", 12, b.offset, b.size, table, bank=bank)
+        if (f.glyph_count == CJK_LATIN_GLYPHS and CJK_INDEX + 0x20000 <= b.size
+                and f.widths_offset + f.glyph_count == b.offset + CJK_BANKS[0]):
+            f.cjk = struct.unpack_from("<65536H", fw.buf, b.offset + CJK_INDEX)
+        elif bank:
+            raise FirmwareError("this image's font12 has no CJK part where expected")
+        return f
 
     # font12 layout -----------------------------------------------------------------------------
     @property
@@ -88,7 +113,13 @@ class Font:
             return cls.font16(fw)
         if name in ("12", "font12"):
             return cls.font12(fw)
-        raise FirmwareError(f"unknown font {name!r}; use 16 or 12")
+        if name in ("12zh", "font12zh"):
+            return cls.font12(fw, bank=1)
+        raise FirmwareError(f"unknown font {name!r}; use 16, 12 or 12zh (font12's Chinese-UI CJK bank)")
+
+    def is_cjk(self, cp: int) -> bool:
+        """font12: drawn from the CJK part (not in the Latin table, but in the CJK index)."""
+        return self.glyph(cp) is None and 0 <= cp < len(self.cjk) and self.cjk[cp] != 0
 
     # Where a glyph lives ---------------------------------------------------------------------
     def offset(self, cp: int) -> int | None:
@@ -97,7 +128,9 @@ class Font:
             return self.blob_offset + off if off + 33 <= self.blob_size else None
         g = self.glyph(cp)
         if g is None:
-            return None
+            if not self.is_cjk(cp):
+                return None
+            return self.blob_offset + CJK_BANKS[self.bank] + (self.cjk[cp] - 1) * FONT12_RECORD
         off = 2 * len(self.table) + g * FONT12_RECORD
         return self.blob_offset + off if off + FONT12_RECORD <= self.blob_size else None
 
@@ -112,9 +145,12 @@ class Font:
         return [int.from_bytes(self.fw.buf[off + 2 * y: off + 2 * y + 2], "big") for y in range(self.size)]
 
     def width(self, cp: int) -> int:
-        """Advance width: font16 stores it after the rows, font12 in its width table."""
+        """Advance width: font16 stores it after the rows, font12 in its width table; font12's CJK
+        glyphs are fixed (12, halfwidth katakana 6)."""
         if self.name == "font16":
             return self.fw.buf[self.offset(cp) + 32] & 0x7F
+        if self.is_cjk(cp):
+            return self.size // 2 if 0xFF61 <= cp <= 0xFF9F else self.size
         return self.fw.buf[self.widths_offset + self.glyph(cp)]
 
     @staticmethod
@@ -133,7 +169,8 @@ class Font:
     def set_image(self, cp: int, img: Image.Image, advance: int | None = None) -> bool:
         """Write a glyph from a size x size image (pixels >= 128 are ink). Returns False if unchanged.
         The advance width is `advance` if given, else recomputed from the ink the way Sony's are
-        (font16: rightmost + 2, font12: rightmost + 1); a glyph with no ink keeps its width."""
+        (font16: rightmost + 2, font12: rightmost + 1); a glyph with no ink keeps its width.
+        font12's CJK glyphs have fixed widths, so only their rows are written."""
         if img.size != (self.size, self.size):
             raise FirmwareError(f"U+{cp:04X}: glyph must be {self.size}x{self.size}")
         off = self.offset(cp)
@@ -141,6 +178,11 @@ class Font:
             raise FirmwareError(f"{self.name} has no glyph for U+{cp:04X}")
         px = img.convert("L").load()
         rows = [sum(1 << (15 - x) for x in range(self.size) if px[x, y] >= 128) for y in range(self.size)]
+        if self.name != "font16" and self.is_cjk(cp):
+            if rows == self.rows(cp):
+                return False
+            self.fw.write(off, b"".join(r.to_bytes(2, "big") for r in rows))
+            return True
         if advance is not None and not 1 <= advance <= self.size:
             raise FirmwareError(f"advance {advance} is outside 1-{self.size} for {self.name}")
         if rows == self.rows(cp) and advance is None:
