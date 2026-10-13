@@ -62,6 +62,14 @@ def explain(stock: Firmware, built: Firmware, patch_files: list[Path] = ()) -> R
     f16, f12 = fonts.Font.font16(stock), fonts.Font.font12(stock)
     f12_glyph_cp = {v: i + 0x20 for i, v in enumerate(f12.table) if v != 0xFFFF}
     f12_data, f12_widths = f12.glyphs_offset, f12.widths_offset
+    # CJK records -> the first code point drawn from them (several may share one); the Latin table
+    # wins over the CJK index, as on the player, so a code point it covers never names a CJK record.
+    f12_cjk_cp: dict[int, int] = {}
+    for cp, r in enumerate(f12.cjk):
+        if r and f12.glyph(cp) is None:
+            f12_cjk_cp.setdefault(r - 1, cp)
+    f12_banks = [(f12.blob_offset + start, name) for start, name in zip(fonts.CJK_BANKS, ("font12", "font12zh"))
+                 if f12.cjk]
 
     def glyph_at(i: int) -> tuple[str, int] | None:
         if f16.blob_offset <= i < f16.blob_offset + min(f16.blob_size, fonts.FONT16_GLYPHS * 33):
@@ -72,6 +80,10 @@ def explain(stock: Firmware, built: Firmware, patch_files: list[Path] = ()) -> R
         if f12_widths <= i < f12_widths + f12.glyph_count:
             cp = f12_glyph_cp.get(i - f12_widths)
             return ("font12 widths", cp) if cp is not None else None
+        for start, name in f12_banks:
+            if start <= i < start + fonts.CJK_BANK_GLYPHS * fonts.FONT12_RECORD:
+                cp = f12_cjk_cp.get((i - start) // fonts.FONT12_RECORD)
+                return (name, cp) if cp is not None else None
         return None
 
     rep = Report()

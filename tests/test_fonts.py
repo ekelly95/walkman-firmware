@@ -230,6 +230,18 @@ def test_cjk_import_writes_rows_only(stock_bytes):
     assert diff and all(off <= i < off + 24 for i in diff) and f.width(0x3042) == 12
 
 
+def test_verify_explains_cjk_glyphs_in_both_banks(stock_bytes):
+    from nwe39x import verify
+    stock, fw = Firmware.from_bytes(stock_bytes), Firmware.from_bytes(stock_bytes)
+    img = Image.new("L", (12, 12), 0)
+    img.putpixel((3, 3), 255)
+    assert fonts.Font.font12(fw).set_image(0x3042, img)           # hiragana a, bank 1
+    assert fonts.Font.font12(fw, bank=1).set_image(0x4E00, img)   # one, bank 2
+    rep = verify.explain(stock, fw)
+    assert rep.ok and rep.glyphs == {"font12": {0x3042}, "font12zh": {0x4E00}}
+    assert fonts.CJK_BANKS[0] + fonts.CJK_BANK_GLYPHS * fonts.FONT12_RECORD == fonts.CJK_BANKS[1]
+
+
 def test_synthetic_font12_has_no_cjk(image_bytes):
     fw = Firmware.from_bytes(image_bytes)
     assert fonts.Font.font12(fw).cjk == () and not fonts.Font.font12(fw).has(0x4E00)

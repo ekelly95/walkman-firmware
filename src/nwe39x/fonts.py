@@ -58,6 +58,7 @@ FONT12_TABLE = 8439  # u16 entries, U+0020..U+20F6
 FONT12_RECORD = 24
 # font12's CJK part, as offsets in the blob (the constants in section 0's readers)
 CJK_BANKS = (0x6B56, 0xC0586)
+CJK_BANK_GLYPHS = 31682
 CJK_INDEX = 0x179FB6
 CJK_LATIN_GLYPHS = 424  # the layout these offsets assume
 

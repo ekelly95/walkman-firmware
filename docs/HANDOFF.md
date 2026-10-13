@@ -7,7 +7,7 @@ Paste this into a new session. It is the state of the project as of 2026-10-13 a
 Firmware modding tools for Sony's NW-E393/E394/E395 Walkman (Rockchip RKnano SoC, Rockchip's own
 RTOS, ARM Thumb-2). Repo: `C:\Users\edmun\Projects\walkman-firmware` (private GitHub
 `ekelly95/walkman-firmware`, branch `main`). Python 3.12, `uv`, package `nwe39x` in `src/`,
-CLI `uv run nwe39x ...`. Tests: `uv run pytest -q` (72 pass). **NOTES.md is the knowledge base**:
+CLI `uv run nwe39x ...`. Tests: `uv run pytest -q` (73 pass). **NOTES.md is the knowledge base**:
 every reverse-engineering fact, with addresses, lives there; read it first and keep it current.
 
 The player (one unit, serial in `nwe39x devinfo`) is on **1.20 = `mods/my-walkman`**: dark
