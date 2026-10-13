@@ -9,7 +9,7 @@ Paste this into a new session. It is the state of the project as of 2026-10-13 a
 Firmware modding tools for Sony's NW-E393/E394/E395 Walkman (Rockchip RKnano SoC, Rockchip's own
 RTOS, ARM Thumb-2). Repo: GitHub `ekelly95/walkman-firmware`, branch `main`; work from its root.
 Python 3.12, `uv`, package `nwe39x` in `src/`, CLI `uv run nwe39x ...`. Tests:
-`uv run pytest -q` (80 pass). **NOTES.md is the knowledge base**:
+`uv run pytest -q` (81 pass). **NOTES.md is the knowledge base**:
 every reverse-engineering fact, with addresses, lives there; read it first and keep it current.
 
 The player (one unit, serial in `nwe39x devinfo`) is on **1.24 = `mods/my-walkman`**: matrix
@@ -60,6 +60,7 @@ changes unless `--allow-code-patches`.
   `Firmware.problems()` or the flash gate, and keep `out/stock-restore` current.
 - Flashing is the user's hardware; ask before anything that is not a normal build-and-flash.
 - Commit style: short title, body says what and why, `Co-Authored-By` line. Push to `origin main`.
+  American spelling (color, gray, center, -ize) in code, docs and commits.
 - Don't commit Sony's files, the user's photos, or generated assets. `.gitignore` already covers them.
 
 ## Firmware facts you will need (details and addresses in NOTES.md)
