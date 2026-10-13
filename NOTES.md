@@ -291,6 +291,11 @@ Pictures are drawn by index after all, through two section 0 routines (names now
   with section 17. The count 6 lives in eight Thumb-1 immediates
   (`0x306c882` .. `0x306c922`). `nwe39x menu hide FM` rewrites the table, those constants and the
   kept icons' slots; verified on the player as 1.13.
+- The home icons are opaque (RGB565): each pair has the backdrop (picture 105, 128x160 at 0,0)
+  behind its own slot baked into its 36x36 square. Their borders match the backdrop in their own
+  slot (91-100% of border pixels) and nowhere else (0-1%), so a moved icon showed as a faint square.
+  `build` now re-fits the backdrop behind moved icons (`menus.rebase_moved_icons`, from the
+  built, possibly themed, backdrop): mean border error 213/56/73 -> 0/0/4 for no-fm.
 
 ## Settings menu: a tree in the string table (2026-10-13)
 

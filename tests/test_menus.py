@@ -49,3 +49,29 @@ def test_cursor_helper_layout():
     code = menus.cursor_helper(0x306C5D8, bytes([0, 1, 2, 2, 3, 4]))
     assert len(code) == 28 and code[16:22] == bytes([0, 1, 2, 2, 3, 4])
     assert code[24:] == (0x3023050).to_bytes(4, "little")
+
+
+def test_moved_icons_get_the_backdrop_of_their_new_slot(stock_bytes):
+    from nwe39x import imageres
+    fw = Firmware.from_bytes(stock_bytes)
+    before = [(p.x, p.y) for p in imageres.pictures(fw)]
+    patches.apply(fw, menus.hide(fw, ["FM"]))
+    pics = imageres.pictures(fw)
+    bd = pics[menus.BACKDROP]
+    bg = imageres.decode(fw, bd).convert("RGB")
+
+    def edge_error(i):  # mean RGB distance between an icon's border and the backdrop behind it
+        p, img = pics[i], imageres.decode(fw, pics[i]).convert("RGB")
+        pts = [(x, y) for x in range(p.width) for y in range(p.height) if x in (0, p.width - 1) or y in (0, p.height - 1)]
+        return sum(sum(abs(a - b) for a, b in zip(img.getpixel(q), bg.getpixel((p.x - bd.x + q[0], p.y - bd.y + q[1]))))
+                   for q in pts) / len(pts)
+
+    moved = [p.index for p in pics if (p.x, p.y) != before[p.index]]
+    assert len(moved) == 6  # Settings, Playlists, Go to song: icon and highlighted twin each
+    assert max(edge_error(i) for i in moved) > 50  # the squares
+    untouched = bytes(fw.buf)
+    assert sorted(menus.rebase_moved_icons(fw, before)) == sorted(moved)
+    assert max(edge_error(i) for i in moved) < 8
+    others = [p for p in pics if p.index not in moved]
+    assert all(fw.buf[p.offset:p.offset + p.size] == untouched[p.offset:p.offset + p.size] for p in others)
+    assert menus.rebase_moved_icons(Firmware.from_bytes(stock_bytes), before) == []  # nothing moved, nothing done

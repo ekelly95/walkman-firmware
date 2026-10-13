@@ -150,6 +150,42 @@ def hide(fw: Firmware, names: list[str]) -> list[patches.Patch]:
     return out
 
 
+# The home screen's full-screen backdrop. Sony drew each icon over the patch of it behind the
+# icon's own slot (no transparency in RGB565), so a moved icon carries a square of the wrong
+# background until `rebase_moved_icons` swaps it.
+BACKDROP = 105
+
+
+def rebase_moved_icons(fw: Firmware, before: list[tuple[int, int]], tol: int = 60) -> list[int]:
+    """For every home icon whose position differs from `before` (picture positions before the
+    build's patches), replace the backdrop baked into it with the backdrop at its new slot: fully
+    where a pixel is the old backdrop, fading out over `tol` (anti-aliased edges), not at all on the
+    icon itself. Uses the backdrop as built, so themes are respected. Returns the pictures changed."""
+    pics = imageres.pictures(fw)
+    moved = [p for p in pics if (p.x, p.y) != before[p.index]]
+    if not moved:
+        return []
+    icons = {i for e in home_menu(fw) for i in (e.icon, e.icon + 1)}
+    bd = pics[BACKDROP]
+    bg = imageres.decode(fw, bd).convert("RGB")
+    changed = []
+    for p in moved:
+        if p.index not in icons:
+            continue
+        (ox, oy), img = before[p.index], imageres.decode(fw, p).convert("RGB")
+        out = img.copy()
+        for y in range(p.height):
+            for x in range(p.width):
+                px = img.getpixel((x, y))
+                old = bg.getpixel((ox - bd.x + x, oy - bd.y + y))
+                new = bg.getpixel((p.x - bd.x + x, p.y - bd.y + y))
+                k = max(0.0, 1 - sum(abs(a - b) for a, b in zip(px, old)) / tol)
+                out.putpixel((x, y), tuple(min(255, max(0, round(a + k * (n - o)))) for a, o, n in zip(px, old, new)))
+        imageres.replace(fw, p.index, out)
+        changed.append(p.index)
+    return changed
+
+
 # The Settings menu is a tree in the string table's record headers (see strtbl.py), rooted here.
 SETTINGS = 110
 

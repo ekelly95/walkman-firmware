@@ -204,6 +204,7 @@ def cmd_fonts_preview(args):
 
 def cmd_build(args):
     fw = Firmware.load(stock_image(args))
+    positions = [(p.x, p.y) for p in imageres.pictures(fw)]
     n, patch_files, mod = 0, [], None
     if args.mod:
         mod = modspec.load(Path(args.mod))
@@ -215,6 +216,8 @@ def cmd_build(args):
                         patches=[Path(f) for f in args.patches or []])
     n += modspec.apply(fw, extra)
     patch_files += extra.patches
+    if rebased := menus.rebase_moved_icons(fw, positions):
+        print(f"home menu: re-fitted the backdrop behind {len(rebased)} moved icon pictures ({', '.join(map(str, rebased))})")
     if not n:
         raise FirmwareError("nothing to change; give --mod, --images, --strings, --fonts or --patches (or use `restore`)")
     version = _write(args, fw)
