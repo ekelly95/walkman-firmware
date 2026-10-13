@@ -1,0 +1,210 @@
+"""The firmware's bitmap fonts.
+
+font1, "font16": 16x16 pixels, one 33-byte record per Unicode code point (U+0000-U+FFFF, indexed
+directly): 16 rows of 2 bytes, MSB = leftmost pixel, then one byte = 0x80 | advance width.
+It covers every UI language (Latin, Cyrillic, Greek, kana, all 11,172 Hangul syllables, 20,902
+CJK ideographs).
+
+font0, "font12": 12x12 pixels, 24-byte records (12 rows of 2 bytes, left 12 bits used), no width
+byte. It starts with a table of 8,056 u16 values: for a code point cp in U+0020-U+1F97,
+glyph = table[cp - 0x20] + 32 (0xFFFF = no glyph), and glyph data starts right after the table.
+That covers ASCII, Latin, Cyrillic and Greek; the CJK and Hangul parts of font0 are reached some
+other way and are not decoded yet.
+
+Sheets are PNGs with one glyph per cell; the font and code points are stored in the PNG's text
+metadata so an edited sheet imports back to the same characters.
+"""
+
+from __future__ import annotations
+
+import json
+import struct
+from dataclasses import dataclass
+from pathlib import Path
+
+from PIL import Image
+from PIL.PngImagePlugin import PngInfo
+
+from .rknanofw import Firmware, FirmwareError
+
+RANGES = {
+    "ascii": range(0x20, 0x7F),
+    "latin1": range(0xA0, 0x100),
+    "latin-ext": range(0x100, 0x180),
+    "cyrillic": range(0x400, 0x460),
+    "greek": range(0x370, 0x400),
+}
+META_KEY = "nwe39x-font"
+INK, PAPER, GRID = 255, 0, 64
+
+
+@dataclass
+class Font:
+    fw: Firmware
+    name: str          # "font16" or "font12"
+    size: int          # glyph cell, square
+    blob_offset: int
+    blob_size: int
+    table: tuple[int, ...] = ()
+
+    @classmethod
+    def font16(cls, fw: Firmware) -> Font:
+        b = fw.blob("font", 1)
+        return cls(fw, "font16", 16, b.offset, b.size)
+
+    @classmethod
+    def font12(cls, fw: Firmware) -> Font:
+        b = fw.blob("font", 0)
+        table = struct.unpack_from("<8056H", fw.buf, b.offset)
+        return cls(fw, "font12", 12, b.offset, b.size, table)
+
+    @classmethod
+    def by_name(cls, fw: Firmware, name: str) -> Font:
+        if name in ("16", "font16"):
+            return cls.font16(fw)
+        if name in ("12", "font12"):
+            return cls.font12(fw)
+        raise FirmwareError(f"unknown font {name!r}; use 16 or 12")
+
+    # Where a glyph lives ---------------------------------------------------------------------
+    def offset(self, cp: int) -> int | None:
+        if self.name == "font16":
+            off = cp * 33
+            return self.blob_offset + off if off + 33 <= self.blob_size else None
+        if not 0x20 <= cp < 0x20 + len(self.table) or self.table[cp - 0x20] == 0xFFFF:
+            return None
+        off = 2 * len(self.table) + (self.table[cp - 0x20] + 32) * 24
+        return self.blob_offset + off if off + 24 <= self.blob_size else None
+
+    def has(self, cp: int) -> bool:
+        return self.offset(cp) is not None
+
+    # Reading and writing ---------------------------------------------------------------------
+    def rows(self, cp: int) -> list[int]:
+        off = self.offset(cp)
+        if off is None:
+            raise FirmwareError(f"{self.name} has no glyph for U+{cp:04X}")
+        return [int.from_bytes(self.fw.buf[off + 2 * y: off + 2 * y + 2], "big") for y in range(self.size)]
+
+    def width(self, cp: int) -> int:
+        """Advance width. font16 stores it; font12 has no width byte, so this applies font16's rule
+        (rightmost ink + 2), which is a guess at how the player spaces font12."""
+        if self.name == "font16":
+            return self.fw.buf[self.offset(cp) + 32] & 0x7F
+        ink = [x for r in self.rows(cp) for x in range(self.size) if r & (1 << (15 - x))]
+        return max(ink) + 2 if ink else 0
+
+    def image(self, cp: int) -> Image.Image:
+        img = Image.new("L", (self.size, self.size), PAPER)
+        for y, v in enumerate(self.rows(cp)):
+            for x in range(self.size):
+                if v & (1 << (15 - x)):
+                    img.putpixel((x, y), INK)
+        return img
+
+    def set_image(self, cp: int, img: Image.Image) -> bool:
+        """Write a glyph from a size x size image (pixels >= 128 are ink). Returns False if unchanged.
+        font16's advance width is recomputed from the ink when the glyph changes."""
+        if img.size != (self.size, self.size):
+            raise FirmwareError(f"U+{cp:04X}: glyph must be {self.size}x{self.size}")
+        off = self.offset(cp)
+        if off is None:
+            raise FirmwareError(f"{self.name} has no glyph for U+{cp:04X}")
+        px = img.convert("L").load()
+        rows = [sum(1 << (15 - x) for x in range(self.size) if px[x, y] >= 128) for y in range(self.size)]
+        if rows == self.rows(cp):
+            return False
+        data = b"".join(r.to_bytes(2, "big") for r in rows)
+        if self.name == "font16":
+            ink = [x for r in rows for x in range(16) if r & (1 << (15 - x))]
+            width = max(ink) + 2 if ink else self.width(cp)
+            data += bytes([0x80 | min(width, 16)])
+        self.fw.write(off, data)
+        return True
+
+
+def parse_range(text: str) -> list[int]:
+    if text in RANGES:
+        return list(RANGES[text])
+    a, _, b = text.upper().replace("U+", "").partition("-")
+    try:
+        return list(range(int(a, 16), int(b or a, 16) + 1))
+    except ValueError:
+        raise FirmwareError(f"range must be one of {', '.join(RANGES)} or like U+0400-U+045F") from None
+
+
+def export_sheet(font: Font, cps: list[int], path: Path, cols: int = 16):
+    cps = [cp for cp in cps if font.has(cp)]
+    if not cps:
+        raise FirmwareError(f"{font.name} has none of those characters")
+    cell = font.size + 1
+    rows = (len(cps) + cols - 1) // cols
+    sheet = Image.new("L", (cols * cell + 1, rows * cell + 1), GRID)
+    for i, cp in enumerate(cps):
+        sheet.paste(font.image(cp), (1 + (i % cols) * cell, 1 + (i // cols) * cell))
+    meta = PngInfo()
+    meta.add_text(META_KEY, json.dumps({"font": font.name, "cols": cols, "cps": cps}))
+    sheet.save(path, pnginfo=meta)
+    return len(cps)
+
+
+def import_sheet(fw: Firmware, path: Path) -> list[int]:
+    img = Image.open(path)
+    raw = img.text.get(META_KEY) if hasattr(img, "text") else None
+    if not raw:
+        raise FirmwareError(f"{path.name} has no {META_KEY} metadata; export a sheet with `nwe39x fonts export`")
+    meta = json.loads(raw)
+    font = Font.by_name(fw, meta["font"])
+    cell, cols = font.size + 1, meta["cols"]
+    img = img.convert("L")
+    changed = []
+    for i, cp in enumerate(meta["cps"]):
+        x, y = 1 + (i % cols) * cell, 1 + (i // cols) * cell
+        if font.set_image(cp, img.crop((x, y, x + font.size, y + font.size))):
+            changed.append(cp)
+    return changed
+
+
+def baseline(font: Font) -> int:
+    """Row just below the original 'H' (its baseline), so replacement glyphs sit on the same line."""
+    rows = font.rows(ord("H"))
+    return max(y for y, r in enumerate(rows) if r) + 1
+
+
+def sheet_from_ttf(font: Font, ttf: Path, cps: list[int], path: Path, size: int | None = None,
+                   cols: int = 16) -> int:
+    """Render a TrueType/OpenType font into a glyph sheet (1-bit, no anti-aliasing) on the
+    firmware font's baseline. Import it with `build --fonts` / a mod's fonts/ folder."""
+    from PIL import ImageDraw, ImageFont
+    cps = [cp for cp in cps if font.has(cp)]
+    face = ImageFont.truetype(str(ttf), size or font.size - 3)
+    base = baseline(font)
+    cell = font.size + 1
+    rows = (len(cps) + cols - 1) // cols
+    sheet = Image.new("L", (cols * cell + 1, rows * cell + 1), GRID)
+    for i, cp in enumerate(cps):
+        glyph = Image.new("L", (font.size, font.size), PAPER)
+        draw = ImageDraw.Draw(glyph)
+        draw.fontmode = "1"
+        draw.text((1, base), chr(cp), font=face, fill=INK, anchor="ls")
+        sheet.paste(glyph, (1 + (i % cols) * cell, 1 + (i // cols) * cell))
+    meta = PngInfo()
+    meta.add_text(META_KEY, json.dumps({"font": font.name, "cols": cols, "cps": cps, "source": Path(ttf).name}))
+    sheet.save(path, pnginfo=meta)
+    return len(cps)
+
+
+def preview(font: Font, text: str, scale: int = 3) -> Image.Image:
+    """Render text with the firmware's own glyphs (missing characters are skipped)."""
+    lines = text.split("\\")
+    width = max(sum(font.width(ord(c)) or font.size // 2 for c in line if font.has(ord(c))) for line in lines) + 4
+    img = Image.new("L", (max(width, 8), len(lines) * (font.size + 2) + 2), PAPER)
+    for row, line in enumerate(lines):
+        x = 2
+        for c in line:
+            if not font.has(ord(c)):
+                continue
+            glyph = font.image(ord(c))
+            img.paste(glyph, (x, 2 + row * (font.size + 2)), glyph)
+            x += font.width(ord(c)) or font.size // 2
+    return img.resize((img.width * scale, img.height * scale), Image.NEAREST)

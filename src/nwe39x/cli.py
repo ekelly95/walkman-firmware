@@ -7,9 +7,11 @@
   nwe39x blobs DIR                         raw resources (stage3.bin is the OS, for Ghidra)
   nwe39x images export DIR                 every UI picture as PNG (+ contact sheet)
   nwe39x strings export FILE.tsv           every UI string, all 13 languages
+  nwe39x fonts export SHEET.png            glyph sheet (--font 16|12, --range ascii|cyrillic|...)
+  nwe39x fonts preview "text" OUT.png      render text with the firmware's own glyphs
   nwe39x bootscreen PHOTO OUT.png          make a 128x160 boot picture from a photo
-  nwe39x build --mod DIR                   patched updater in out/updater from DIR/images/*.png and
-                                           DIR/strings.tsv (version picked from the player)
+  nwe39x build --mod DIR                   patched updater in out/updater from DIR/images/*.png,
+                                           DIR/strings.tsv and DIR/fonts/*.png (version from the player)
   nwe39x restore                           Sony's stock firmware, re-versioned so it installs over a mod
 """
 
@@ -19,7 +21,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import bootscreen, device, imageres, strtbl, updater
+from . import bootscreen, device, fonts, imageres, strtbl, updater
 from .rknanofw import Firmware, FirmwareError, stage_sections
 
 DEFAULT_EXTRACT = Path("extract")
@@ -80,15 +82,31 @@ def cmd_diff(args):
     regions += [(m.start(1), m.end(1), "firmware version (XML)"), (4, 8, "header version"),
                 (stock.size_field + 4, stock.size_field + 8, "backup header version"),
                 (len(stock.buf) - 4, len(stock.buf), "CRC")]
-    hits, unknown = {}, []
+    f16, f12 = fonts.Font.font16(stock), fonts.Font.font12(stock)
+    f12_glyph_cp = {v + 32: i + 0x20 for i, v in enumerate(f12.table) if v != 0xFFFF}
+    f12_data = f12.blob_offset + 2 * len(f12.table)
+
+    def glyph_at(i: int) -> tuple[str, int] | None:
+        if f16.blob_offset <= i < f16.blob_offset + f16.blob_size:
+            return "font16", (i - f16.blob_offset) // 33
+        if f12_data <= i < f12.blob_offset + f12.blob_size:
+            cp = f12_glyph_cp.get((i - f12_data) // 24)
+            return ("font12", cp) if cp is not None else None
+        return None
+
+    hits, glyphs, unknown = {}, {}, []
     for i in (i for i in range(len(stock.buf)) if fw.buf[i] != stock.buf[i]):
         name = next((n for s, e, n in regions if s <= i < e), None)
         if name:
             hits[name] = hits.get(name, 0) + 1
+        elif g := glyph_at(i):
+            glyphs.setdefault(g[0], set()).add(g[1])
         else:
             unknown.append(i)
     for name, n in hits.items():
         print(f"  {name}: {n} bytes")
+    for font, cps in glyphs.items():
+        print(f"  {font}: {len(cps)} glyphs, U+{min(cps):04X}..U+{max(cps):04X}")
     if unknown:
         print(f"  UNEXPECTED: {len(unknown)} bytes outside known regions, first at {unknown[0]:#x}")
     print("checks: " + ("pass" if not fw.problems() else "; ".join(fw.problems())))
@@ -128,21 +146,44 @@ def cmd_strings_export(args):
     print(f"wrote {args.file}")
 
 
+def cmd_fonts_export(args):
+    fw = Firmware.load(stock_image(args))
+    n = fonts.export_sheet(fonts.Font.by_name(fw, args.font), fonts.parse_range(args.range), Path(args.out))
+    print(f"wrote {n} glyphs to {args.out}; edit them (white = ink) and put the file in your mod's fonts/ folder")
+
+
+def cmd_fonts_from_ttf(args):
+    fw = Firmware.load(stock_image(args))
+    font = fonts.Font.by_name(fw, args.font)
+    n = fonts.sheet_from_ttf(font, Path(args.ttf), fonts.parse_range(args.range), Path(args.out), args.size)
+    print(f"wrote {n} glyphs from {Path(args.ttf).name} to {args.out}")
+
+
+def cmd_fonts_preview(args):
+    fw = Firmware.load(stock_image(args))
+    fonts.preview(fonts.Font.by_name(fw, args.font), args.text).save(args.out)
+    print(f"wrote {args.out}")
+
+
 def cmd_build(args):
     fw = Firmware.load(stock_image(args))
-    images, strings = args.images, args.strings
+    images, strings, font_dir = args.images, args.strings, args.fonts
     if args.mod:
         mod = Path(args.mod)
         images = images or (mod / "images" if (mod / "images").is_dir() else None)
         strings = strings or (mod / "strings.tsv" if (mod / "strings.tsv").is_file() else None)
+        font_dir = font_dir or (mod / "fonts" if (mod / "fonts").is_dir() else None)
     pics = imageres.import_dir(fw, Path(images)) if images else []
     texts = strtbl.import_tsv(fw, Path(strings)) if strings else []
-    if not pics and not texts:
-        raise FirmwareError("nothing to change; give --mod, --images or --strings (or use `restore`)")
+    glyphs = [cp for sheet in sorted(Path(font_dir).glob("*.png")) for cp in fonts.import_sheet(fw, sheet)] if font_dir else []
+    if not pics and not texts and not glyphs:
+        raise FirmwareError("nothing to change; give --mod, --images, --strings or --fonts (or use `restore`)")
     if pics:
         print(f"pictures replaced: {', '.join(map(str, pics))}")
     if texts:
         print(f"strings changed: {', '.join(f'{lang}:{r}' for lang, r in texts)}")
+    if glyphs:
+        print(f"glyphs changed: {len(glyphs)}")
     _write(args, fw)
 
 
@@ -216,6 +257,28 @@ def main(argv: list[str] | None = None):
     image_args(p)
     p.set_defaults(func=cmd_strings_export)
 
+    fnt = sub.add_parser("fonts", help="bitmap fonts").add_subparsers(dest="fonts_cmd", required=True)
+    p = fnt.add_parser("export", help="write a glyph sheet PNG for a range of characters")
+    p.add_argument("out")
+    p.add_argument("--font", default="16", help="16 (font1, 16x16) or 12 (font0, 12x12)")
+    p.add_argument("--range", default="ascii", help=f"{', '.join(fonts.RANGES)} or U+XXXX-U+YYYY")
+    image_args(p)
+    p.set_defaults(func=cmd_fonts_export)
+    p = fnt.add_parser("from-ttf", help="render a TrueType font into a glyph sheet")
+    p.add_argument("ttf")
+    p.add_argument("out")
+    p.add_argument("--font", default="16", help="16 or 12")
+    p.add_argument("--range", default="ascii")
+    p.add_argument("--size", type=int, help="pixel size (default: cell size - 3)")
+    image_args(p)
+    p.set_defaults(func=cmd_fonts_from_ttf)
+    p = fnt.add_parser("preview", help="render text with the firmware's glyphs")
+    p.add_argument("text", help='a backslash starts a new line')
+    p.add_argument("out")
+    p.add_argument("--font", default="16")
+    image_args(p)
+    p.set_defaults(func=cmd_fonts_preview)
+
     p = sub.add_parser("bootscreen", help="make a 128x160 boot picture from a photo")
     p.add_argument("photo")
     p.add_argument("out")
@@ -233,6 +296,7 @@ def main(argv: list[str] | None = None):
             p.add_argument("--mod", help="mod folder with images/ and/or strings.tsv")
             p.add_argument("--images", help="folder of NNN.png / NNN_*.png pictures to swap in")
             p.add_argument("--strings", help="TSV of lang<TAB>record<TAB>text lines")
+            p.add_argument("--fonts", help="folder of glyph sheets from `nwe39x fonts export`")
         p.add_argument("--version", help="version to install as, e.g. 1.03 (default: one above the player's)")
         p.add_argument("-o", "--out", type=Path, default=DEFAULT_OUT)
         p.set_defaults(func=func)

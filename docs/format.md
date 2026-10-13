@@ -148,7 +148,20 @@ Pixels are **RGB565, big-endian**, rows top to bottom. Notable pictures: 044 the
 (128×160), 083 the power-off screen (128×160), and full-screen factory test patterns (colour bars,
 diagonal stripes).
 
-## 8. fonts
+## 8. Fonts
 
-`font0` and `font1` start with an identity table of u16 values (0, 1, 2, …), probably a code-point
-to glyph map; `gbk0` is a Chinese GBK font. Not decoded yet (milestone M7).
+**font1: 16×16, every code point.** 65,536 records of 33 bytes, indexed directly by Unicode code
+point (U+0000-U+FFFF): 16 rows × 2 bytes (big-endian, MSB = leftmost pixel), then one byte
+`0x80 | advance width`. Sony's widths are exactly *rightmost ink column + 2*; space has width 0.
+34,623 glyphs have pixels, including all 11,172 Hangul syllables and 20,902 CJK ideographs, so this
+one font covers every UI language. A 7,174-byte table follows the records (not decoded).
+
+**font0: 12×12.** A table of 8,056 u16 values, then 24-byte glyphs (12 rows × 2 bytes, left 12 bits
+used, no width byte). For U+0020-U+1F97, `glyph = table[cp - 0x20] + 32` (`0xFFFF` = none):
+ASCII, Latin-1, the Latin Extended letters Polish/Turkish need, Greek and Cyrillic, 418 glyphs in
+all. The glyph area holds 75,786 records; the later blocks (kana, Hangul, CJK, and what look like
+further font variants) are reached some other way, not yet found.
+
+**gbk0:** a Chinese GBK-related table/font (1,835,008 bytes), not decoded.
+
+`nwe39x fonts export|from-ttf|preview` read and write both fonts; edits go in a mod's `fonts/`.

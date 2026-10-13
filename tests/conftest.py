@@ -37,6 +37,26 @@ def make_strtbl(records: int = 3) -> bytes:
     return header + bytes(body)
 
 
+def make_font16(count: int = 0x80) -> bytes:
+    """font1 layout for the first `count` code points: 32 bytes of rows + 0x80|width."""
+    out = bytearray()
+    for cp in range(count):
+        rows = bytes(32) if cp < 0x21 else b"".join(((0x8000 >> (cp % 8)) | 0x0100).to_bytes(2, "big") for _ in range(16))
+        out += rows + bytes([0x80 | (0 if cp < 0x21 else 9)])
+    return bytes(out)
+
+
+def make_font12() -> bytes:
+    """font0 layout: 8056-entry table (ASCII mapped as in the real font), then 24-byte glyphs."""
+    table = [0xFFFF] * 8056
+    for i in range(95):
+        table[i] = i
+    glyphs = bytearray()
+    for g in range(32 + 95):
+        glyphs += b"".join(((0x8000 >> (g % 12)) if g >= 33 else 0).to_bytes(2, "big") for _ in range(12))
+    return struct.pack("<8056H", *table) + bytes(glyphs)
+
+
 def make_stage3() -> bytes:
     base = 0x03050000
     body = b"\x00" * 16 + b"<firmwareversion>1.01</firmwareversion>"
@@ -63,6 +83,7 @@ def make_image() -> bytes:
             offset += len(blob)
 
     table(0x50, [b"", b"", b"", stage3])
+    table(0x74, [make_font12(), make_font16()])
     table(0xF4, [make_strtbl()])
     table(0x148, [imageres])
     size = HEADER_SIZE + len(payload)
