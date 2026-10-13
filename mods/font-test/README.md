@@ -7,5 +7,6 @@ are not committed; recreate them with:
 ```
 nwe39x fonts from-ttf C:/Windows/Fonts/comicbd.ttf mods/font-test/fonts/font16_comic_bold.png --font 16 --size 14
 nwe39x fonts from-ttf C:/Windows/Fonts/consola.ttf mods/font-test/fonts/font12_consolas.png --font 12 --size 11
-nwe39x build --mod mods/cat-lovers --fonts mods/font-test/fonts
+nwe39x build --mod mods/cat-lovers --fonts mods/font-test/fonts -o out/fonttest
+nwe39x flash --updater out/fonttest
 ```

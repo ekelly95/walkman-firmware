@@ -142,8 +142,24 @@ was checked against the bytes.
   "byte != 0" path; the section 34 clamp is left in as a commented second step. `nwe39x build`
   applies `patches.tsv` from a mod (old bytes must match), `nwe39x diff --patches` names them.
 
-## Not known yet
+## Flashing without Sony's tool (2026-10-12, works: `nwe39x flash`)
 
-- The USB command Sony's tool sends to start the install (would allow flashing without Sony's tool).
+`WmFwUpdater.dll` (CWmFwUpdateWorkerMsc / CWmFwScsiCmd / sptioctl::CSptIoCtl, decompiled in
+`work/ghidra-dll/startfw*.c`) copies `RKNANOFW.IMG` to the drive root, opens `\\.\X:` and sends a
+12-byte vendor CDB through `IOCTL_SCSI_PASS_THROUGH_DIRECT`. Two commands, both
+`FC 00 <op> 'd' 'b' 'm' 'n' ...`:
+
+- op `0x20`, 0x80 bytes in: **REQUEST DEVINFO** -> `"DEVINFO"`, size, vendor `SONY`, model
+  `NW-E394`, version `1.1010` (header BCD major.minor + rev), serial. This is the version Sony's
+  tool compares with its package after the install (the "false failed" of 1.04: header said 1.01).
+- op `0x04`, no data: **START FW UPDATE** -> the player unmounts within 2 s, installs, deletes the
+  file and is back in about 15 s.
+
+Both work without elevation. `nwe39x devinfo` is the read-only check; `nwe39x flash --updater
+out/x` copies, sends, and waits. The player itself never checks the version, so with this there is
+no need to count upwards any more (the builds still do, so Unit Information tells them apart).
+Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, `FC 04` reboots.
+
+## Not known yet
 - Brick recovery: Rockbox `utils/rknanoutils/rkload` loads code over USB in the RKnano boot-ROM
   mode. How to enter that mode on this player is unknown (possibly a test point inside).

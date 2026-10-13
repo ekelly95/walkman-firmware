@@ -14,6 +14,8 @@
                                            DIR/strings.tsv, DIR/fonts/*.png and DIR/patches.tsv
                                            (version from the player)
   nwe39x restore                           Sony's stock firmware, re-versioned so it installs over a mod
+  nwe39x flash [IMG]                       install a built image directly (copy + START FW UPDATE over SCSI)
+  nwe39x devinfo                           the DEVINFO block the player returns over SCSI
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import bootscreen, device, fonts, imageres, patches, strtbl, updater
+from . import bootscreen, device, flash, fonts, imageres, patches, strtbl, updater
 from .rknanofw import Firmware, FirmwareError, stage_sections
 
 DEFAULT_EXTRACT = Path("extract")
@@ -223,6 +225,34 @@ def cmd_status(args):
         print(f"{p.root}  firmware {p.version}")
 
 
+def one_player(args) -> device.Player:
+    players = [device.read_player(Path(args.drive))] if args.drive else device.find_players()
+    if len(players) != 1 or players[0] is None:
+        raise FirmwareError(f"found {len([p for p in players if p])} connected players; plug one in or pass --drive")
+    return players[0]
+
+
+def cmd_devinfo(args):
+    p = one_player(args)
+    info = flash.devinfo(p.root)
+    print(f"{p.root}  firmware {p.version}")
+    print(f"DEVINFO: {info}")
+    print(f"raw: {info.raw.hex()}")
+
+
+def cmd_flash(args):
+    if args.img:
+        img = Path(args.img)
+    else:
+        img = args.updater / updater.IMG
+    if not img.exists():
+        raise FirmwareError(f"{img} not found; build it first or pass IMG")
+    p = one_player(args)
+    version = flash.flash(img, p.root, wait=not args.no_wait)
+    if version:
+        print(f"done: the player reports {version}")
+
+
 def main(argv: list[str] | None = None):
     ap = argparse.ArgumentParser(prog="nwe39x", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -242,6 +272,17 @@ def main(argv: list[str] | None = None):
 
     p = sub.add_parser("status", help="show connected players and their firmware version")
     p.set_defaults(func=cmd_status)
+
+    p = sub.add_parser("devinfo", help="ask the player for its DEVINFO block over SCSI (read-only)")
+    p.add_argument("--drive", help="player's drive, e.g. D:/ (default: the one connected player)")
+    p.set_defaults(func=cmd_devinfo)
+
+    p = sub.add_parser("flash", help="install an image without Sony's tool: copy it to the player and send START FW UPDATE")
+    p.add_argument("img", nargs="?", help="RKNANOFW.IMG to install (default: the one in --updater)")
+    p.add_argument("--updater", type=Path, default=DEFAULT_OUT, help="build folder holding Data/Device/RKNANOFW.IMG")
+    p.add_argument("--drive", help="player's drive, e.g. D:/")
+    p.add_argument("--no-wait", action="store_true", help="return right after sending the command")
+    p.set_defaults(func=cmd_flash)
 
     p = sub.add_parser("diff", help="list what a built image changes compared with Sony's")
     p.add_argument("target", help="built RKNANOFW.IMG, e.g. out/updater/Data/Device/RKNANOFW.IMG")
