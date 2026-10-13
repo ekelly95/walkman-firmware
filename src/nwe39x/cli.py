@@ -10,6 +10,7 @@
   nwe39x fonts export SHEET.png            glyph sheet (--font 16|12, --range ascii|cyrillic|...)
   nwe39x fonts preview "text" OUT.png      render text with the firmware's own glyphs
   nwe39x bootscreen PHOTO OUT.png          make a 128x160 boot picture from a photo
+  nwe39x theme mono|hue DIR                recolour every UI picture into DIR (--hue DEG, --sheet PNG)
   nwe39x build --mod DIR                   patched updater in out/updater from DIR/images/*.png,
                                            DIR/strings.tsv, DIR/fonts/*.png and DIR/patches.tsv
                                            (version from the player)
@@ -24,7 +25,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import bootscreen, device, flash, fonts, imageres, patches, strtbl, updater
+from . import bootscreen, device, flash, fonts, imageres, patches, strtbl, themes, updater
 from .rknanofw import Firmware, FirmwareError, stage_sections
 
 DEFAULT_EXTRACT = Path("extract")
@@ -148,6 +149,14 @@ def cmd_bootscreen(args):
     print(f"wrote {args.out} (the boot screen is picture {bootscreen.BOOT_PICTURE:03d}, power off is 083)")
 
 
+def cmd_theme(args):
+    fw = Firmware.load(stock_image(args))
+    fn = themes.transform(args.theme, args.hue)
+    skip = set() if args.artwork else themes.ARTWORK
+    changed = themes.generate(fw, Path(args.dir), fn, skip, Path(args.sheet) if args.sheet else None)
+    print(f"wrote {len(changed)} recoloured pictures to {args.dir}; build with --images {args.dir}")
+
+
 def cmd_strings_export(args):
     fw = Firmware.load(stock_image(args))
     strtbl.export(fw, Path(args.file), args.lang)
@@ -175,14 +184,15 @@ def cmd_fonts_preview(args):
 
 def cmd_build(args):
     fw = Firmware.load(stock_image(args))
-    images, strings, font_dir, patch_file = args.images, args.strings, args.fonts, args.patches
+    images, strings, font_dir, patch_file = list(args.images or []), args.strings, args.fonts, args.patches
     if args.mod:
         mod = Path(args.mod)
-        images = images or (mod / "images" if (mod / "images").is_dir() else None)
+        if (mod / "images").is_dir():
+            images.insert(0, mod / "images")
         strings = strings or (mod / "strings.tsv" if (mod / "strings.tsv").is_file() else None)
         font_dir = font_dir or (mod / "fonts" if (mod / "fonts").is_dir() else None)
         patch_file = patch_file or (mod / "patches.tsv" if (mod / "patches.tsv").is_file() else None)
-    pics = imageres.import_dir(fw, Path(images)) if images else []
+    pics = [i for d in images for i in imageres.import_dir(fw, Path(d))]
     texts = strtbl.import_tsv(fw, Path(strings)) if strings else []
     glyphs = [cp for sheet in sorted(Path(font_dir).glob("*.png")) for cp in fonts.import_sheet(fw, sheet)] if font_dir else []
     code = patches.apply(fw, patches.parse_tsv(Path(patch_file))) if patch_file else []
@@ -331,6 +341,15 @@ def main(argv: list[str] | None = None):
     image_args(p)
     p.set_defaults(func=cmd_fonts_preview)
 
+    p = sub.add_parser("theme", help="recolour the UI pictures into a folder for `build --images`")
+    p.add_argument("theme", choices=["mono", "hue"], help="mono: grey accents (reds kept); hue: rotate colours")
+    p.add_argument("dir")
+    p.add_argument("--hue", type=float, help="degrees for the hue theme (gold is ~40; 200 ice blue, 290 purple)")
+    p.add_argument("--sheet", help="also write a contact sheet PNG of the whole themed set")
+    p.add_argument("--artwork", action="store_true", help="also recolour the boot and power-off pictures")
+    image_args(p)
+    p.set_defaults(func=cmd_theme)
+
     p = sub.add_parser("bootscreen", help="make a 128x160 boot picture from a photo")
     p.add_argument("photo")
     p.add_argument("out")
@@ -346,7 +365,7 @@ def main(argv: list[str] | None = None):
         image_args(p)
         if name == "build":
             p.add_argument("--mod", help="mod folder with images/, strings.tsv, fonts/ and/or patches.tsv")
-            p.add_argument("--images", help="folder of NNN.png / NNN_*.png pictures to swap in")
+            p.add_argument("--images", action="append", help="folder of NNN.png / NNN_*.png pictures to swap in (repeatable; later folders win)")
             p.add_argument("--strings", help="TSV of lang<TAB>record<TAB>text lines")
             p.add_argument("--fonts", help="folder of glyph sheets from `nwe39x fonts export`")
             p.add_argument("--patches", help="patches.tsv of code changes (section, run address, old, new)")
