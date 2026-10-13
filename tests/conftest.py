@@ -47,14 +47,16 @@ def make_font16(count: int = 0x80) -> bytes:
 
 
 def make_font12() -> bytes:
-    """font0 layout: 8056-entry table (ASCII mapped as in the real font), then 24-byte glyphs."""
-    table = [0xFFFF] * 8056
+    """font0 layout: 8439-entry table (ASCII mapped to glyphs 0-94), 24-byte glyphs, then one
+    width byte per glyph (rightmost ink + 1, like Sony's)."""
+    table = [0xFFFF] * 8439
     for i in range(95):
         table[i] = i
-    glyphs = bytearray()
-    for g in range(32 + 95):
-        glyphs += b"".join(((0x8000 >> (g % 12)) if g >= 33 else 0).to_bytes(2, "big") for _ in range(12))
-    return struct.pack("<8056H", *table) + bytes(glyphs)
+    glyphs, widths = bytearray(), bytearray()
+    for g in range(95):
+        glyphs += b"".join(((0x8000 >> (g % 12)) if g >= 1 else 0).to_bytes(2, "big") for _ in range(12))
+        widths.append((g % 12) + 1 if g >= 1 else 5)
+    return struct.pack("<8439H", *table) + bytes(glyphs) + bytes(widths)
 
 
 def make_stage3() -> bytes:

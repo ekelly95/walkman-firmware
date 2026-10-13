@@ -11,7 +11,8 @@
   nwe39x fonts preview "text" OUT.png      render text with the firmware's own glyphs
   nwe39x bootscreen PHOTO OUT.png          make a 128x160 boot picture from a photo
   nwe39x build --mod DIR                   patched updater in out/updater from DIR/images/*.png,
-                                           DIR/strings.tsv and DIR/fonts/*.png (version from the player)
+                                           DIR/strings.tsv, DIR/fonts/*.png and DIR/patches.tsv
+                                           (version from the player)
   nwe39x restore                           Sony's stock firmware, re-versioned so it installs over a mod
 """
 
@@ -21,7 +22,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import bootscreen, device, fonts, imageres, strtbl, updater
+from . import bootscreen, device, fonts, imageres, patches, strtbl, updater
 from .rknanofw import Firmware, FirmwareError, stage_sections
 
 DEFAULT_EXTRACT = Path("extract")
@@ -77,21 +78,26 @@ def cmd_diff(args):
     if len(fw.buf) != len(stock.buf):
         raise FirmwareError("images differ in size")
     regions = [(p.offset, p.offset + p.size, f"picture {p.index:03d}") for p in imageres.pictures(stock)]
+    if args.patches:
+        regions += patches.regions(stock, patches.parse_tsv(Path(args.patches)))
     regions += [(t.offset, t.offset + strtbl.SLOT, f"string {t.lang}:{t.record} ({t.text!r})") for t in strtbl.texts(stock)]
     m = updater.VERSION_RE.search(bytes(stock.buf))
     regions += [(m.start(1), m.end(1), "firmware version (XML)"), (4, 8, "header version"),
                 (stock.size_field + 4, stock.size_field + 8, "backup header version"),
                 (len(stock.buf) - 4, len(stock.buf), "CRC")]
     f16, f12 = fonts.Font.font16(stock), fonts.Font.font12(stock)
-    f12_glyph_cp = {v + 32: i + 0x20 for i, v in enumerate(f12.table) if v != 0xFFFF}
-    f12_data = f12.blob_offset + 2 * len(f12.table)
+    f12_glyph_cp = {v: i + 0x20 for i, v in enumerate(f12.table) if v != 0xFFFF}
+    f12_data, f12_widths = f12.glyphs_offset, f12.widths_offset
 
     def glyph_at(i: int) -> tuple[str, int] | None:
         if f16.blob_offset <= i < f16.blob_offset + f16.blob_size:
             return "font16", (i - f16.blob_offset) // 33
-        if f12_data <= i < f12.blob_offset + f12.blob_size:
-            cp = f12_glyph_cp.get((i - f12_data) // 24)
+        if f12_data <= i < f12_widths:
+            cp = f12_glyph_cp.get((i - f12_data) // fonts.FONT12_RECORD)
             return ("font12", cp) if cp is not None else None
+        if f12_widths <= i < f12_widths + f12.glyph_count:
+            cp = f12_glyph_cp.get(i - f12_widths)
+            return ("font12 widths", cp) if cp is not None else None
         return None
 
     hits, glyphs, unknown = {}, {}, []
@@ -167,23 +173,27 @@ def cmd_fonts_preview(args):
 
 def cmd_build(args):
     fw = Firmware.load(stock_image(args))
-    images, strings, font_dir = args.images, args.strings, args.fonts
+    images, strings, font_dir, patch_file = args.images, args.strings, args.fonts, args.patches
     if args.mod:
         mod = Path(args.mod)
         images = images or (mod / "images" if (mod / "images").is_dir() else None)
         strings = strings or (mod / "strings.tsv" if (mod / "strings.tsv").is_file() else None)
         font_dir = font_dir or (mod / "fonts" if (mod / "fonts").is_dir() else None)
+        patch_file = patch_file or (mod / "patches.tsv" if (mod / "patches.tsv").is_file() else None)
     pics = imageres.import_dir(fw, Path(images)) if images else []
     texts = strtbl.import_tsv(fw, Path(strings)) if strings else []
     glyphs = [cp for sheet in sorted(Path(font_dir).glob("*.png")) for cp in fonts.import_sheet(fw, sheet)] if font_dir else []
-    if not pics and not texts and not glyphs:
-        raise FirmwareError("nothing to change; give --mod, --images, --strings or --fonts (or use `restore`)")
+    code = patches.apply(fw, patches.parse_tsv(Path(patch_file))) if patch_file else []
+    if not pics and not texts and not glyphs and not code:
+        raise FirmwareError("nothing to change; give --mod, --images, --strings, --fonts or --patches (or use `restore`)")
     if pics:
         print(f"pictures replaced: {', '.join(map(str, pics))}")
     if texts:
         print(f"strings changed: {', '.join(f'{lang}:{r}' for lang, r in texts)}")
     if glyphs:
         print(f"glyphs changed: {len(glyphs)}")
+    for p in code:
+        print(f"code patched: {p}")
     _write(args, fw)
 
 
@@ -236,6 +246,7 @@ def main(argv: list[str] | None = None):
     p = sub.add_parser("diff", help="list what a built image changes compared with Sony's")
     p.add_argument("target", help="built RKNANOFW.IMG, e.g. out/updater/Data/Device/RKNANOFW.IMG")
     p.add_argument("--cab", type=Path, default=DEFAULT_EXTRACT / "cab", help="unpacked updater folder")
+    p.add_argument("--patches", help="patches.tsv the build used, so its bytes are named rather than UNEXPECTED")
     p.set_defaults(func=cmd_diff)
 
     p = sub.add_parser("blobs", help="write every resource (stage3 = the OS, fonts, strings, images) to DIR")
@@ -293,10 +304,11 @@ def main(argv: list[str] | None = None):
         p = sub.add_parser(name, help=helptext)
         image_args(p)
         if name == "build":
-            p.add_argument("--mod", help="mod folder with images/ and/or strings.tsv")
+            p.add_argument("--mod", help="mod folder with images/, strings.tsv, fonts/ and/or patches.tsv")
             p.add_argument("--images", help="folder of NNN.png / NNN_*.png pictures to swap in")
             p.add_argument("--strings", help="TSV of lang<TAB>record<TAB>text lines")
             p.add_argument("--fonts", help="folder of glyph sheets from `nwe39x fonts export`")
+            p.add_argument("--patches", help="patches.tsv of code changes (section, run address, old, new)")
         p.add_argument("--version", help="version to install as, e.g. 1.03 (default: one above the player's)")
         p.add_argument("-o", "--out", type=Path, default=DEFAULT_OUT)
         p.set_defaults(func=func)

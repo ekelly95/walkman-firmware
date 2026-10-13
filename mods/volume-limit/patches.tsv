@@ -1,0 +1,8 @@
+# Volume limit off: make the 1.01 firmware take the paths it takes when the settings byte at
+# SRAM 0x4bba (settings block 0x4b70 + 0x4a) is non-zero. See NOTES.md, "Volume limit".
+# section	run address	old	new	note
+0	3064b94	49b9	09e0	volume-may-exceed-17 check always says yes (cbnz -> b)
+10	306ea9a	40b9	08e0	boot: skip listening-time accrual and the clamp to 17 (cbnz -> b)
+# Second-stage candidate, not in the first test build: a section 34 handler clamps volume > 18 to
+# 17 regardless of the byte. `cmp r0, #0x12` -> `cmp r0, #0xff` makes it always return early.
+#34	306c7fe	1228	ff28	sec 34 handler: never clamp volume to 17

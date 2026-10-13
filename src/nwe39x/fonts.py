@@ -5,11 +5,12 @@ directly): 16 rows of 2 bytes, MSB = leftmost pixel, then one byte = 0x80 | adva
 It covers every UI language (Latin, Cyrillic, Greek, kana, all 11,172 Hangul syllables, 20,902
 CJK ideographs).
 
-font0, "font12": 12x12 pixels, 24-byte records (12 rows of 2 bytes, left 12 bits used), no width
-byte. It starts with a table of 8,056 u16 values: for a code point cp in U+0020-U+1F97,
-glyph = table[cp - 0x20] + 32 (0xFFFF = no glyph), and glyph data starts right after the table.
-That covers ASCII, Latin, Cyrillic and Greek; the CJK and Hangul parts of font0 are reached some
-other way and are not decoded yet.
+font0, "font12": 12x12 pixels. A table of 8,439 u16 values maps code points U+0020-U+20F6 to
+glyph numbers (0xFFFF = no glyph); then 424 glyph records of 24 bytes (12 rows of 2 bytes, left 12
+bits used, rows 0 and 11 blank in Sony's glyphs); then one advance-width byte per glyph (Sony's
+are rightmost ink + 1; space is 5). The player clips each glyph to its advance, so a replaced
+glyph needs its width written too. That covers ASCII, Latin, Cyrillic and Greek; the CJK and
+Hangul parts of font0 follow the width table and are not decoded yet.
 
 Sheets are PNGs with one glyph per cell; the font and code points are stored in the PNG's text
 metadata so an edited sheet imports back to the same characters.
@@ -36,6 +37,8 @@ RANGES = {
 }
 META_KEY = "nwe39x-font"
 INK, PAPER, GRID = 255, 0, 64
+FONT12_TABLE = 8439  # u16 entries, U+0020..U+20F6
+FONT12_RECORD = 24
 
 
 @dataclass
@@ -55,8 +58,26 @@ class Font:
     @classmethod
     def font12(cls, fw: Firmware) -> Font:
         b = fw.blob("font", 0)
-        table = struct.unpack_from("<8056H", fw.buf, b.offset)
+        table = struct.unpack_from(f"<{FONT12_TABLE}H", fw.buf, b.offset)
         return cls(fw, "font12", 12, b.offset, b.size, table)
+
+    # font12 layout -----------------------------------------------------------------------------
+    @property
+    def glyph_count(self) -> int:
+        return max(v for v in self.table if v != 0xFFFF) + 1
+
+    @property
+    def glyphs_offset(self) -> int:
+        return self.blob_offset + 2 * len(self.table)
+
+    @property
+    def widths_offset(self) -> int:
+        return self.glyphs_offset + self.glyph_count * FONT12_RECORD
+
+    def glyph(self, cp: int) -> int | None:
+        if not 0x20 <= cp < 0x20 + len(self.table) or self.table[cp - 0x20] == 0xFFFF:
+            return None
+        return self.table[cp - 0x20]
 
     @classmethod
     def by_name(cls, fw: Firmware, name: str) -> Font:
@@ -71,10 +92,11 @@ class Font:
         if self.name == "font16":
             off = cp * 33
             return self.blob_offset + off if off + 33 <= self.blob_size else None
-        if not 0x20 <= cp < 0x20 + len(self.table) or self.table[cp - 0x20] == 0xFFFF:
+        g = self.glyph(cp)
+        if g is None:
             return None
-        off = 2 * len(self.table) + (self.table[cp - 0x20] + 32) * 24
-        return self.blob_offset + off if off + 24 <= self.blob_size else None
+        off = 2 * len(self.table) + g * FONT12_RECORD
+        return self.blob_offset + off if off + FONT12_RECORD <= self.blob_size else None
 
     def has(self, cp: int) -> bool:
         return self.offset(cp) is not None
@@ -87,12 +109,15 @@ class Font:
         return [int.from_bytes(self.fw.buf[off + 2 * y: off + 2 * y + 2], "big") for y in range(self.size)]
 
     def width(self, cp: int) -> int:
-        """Advance width. font16 stores it; font12 has no width byte, so this applies font16's rule
-        (rightmost ink + 2), which is a guess at how the player spaces font12."""
+        """Advance width: font16 stores it after the rows, font12 in its width table."""
         if self.name == "font16":
             return self.fw.buf[self.offset(cp) + 32] & 0x7F
-        ink = [x for r in self.rows(cp) for x in range(self.size) if r & (1 << (15 - x))]
-        return max(ink) + 2 if ink else 0
+        return self.fw.buf[self.widths_offset + self.glyph(cp)]
+
+    @staticmethod
+    def _rightmost_ink(rows: list[int], size: int) -> int | None:
+        ink = [x for r in rows for x in range(size) if r & (1 << (15 - x))]
+        return max(ink) if ink else None
 
     def image(self, cp: int) -> Image.Image:
         img = Image.new("L", (self.size, self.size), PAPER)
@@ -104,7 +129,8 @@ class Font:
 
     def set_image(self, cp: int, img: Image.Image) -> bool:
         """Write a glyph from a size x size image (pixels >= 128 are ink). Returns False if unchanged.
-        font16's advance width is recomputed from the ink when the glyph changes."""
+        The advance width is recomputed from the ink the way Sony's are (font16: rightmost + 2,
+        font12: rightmost + 1); a glyph with no ink keeps its width."""
         if img.size != (self.size, self.size):
             raise FirmwareError(f"U+{cp:04X}: glyph must be {self.size}x{self.size}")
         off = self.offset(cp)
@@ -115,10 +141,13 @@ class Font:
         if rows == self.rows(cp):
             return False
         data = b"".join(r.to_bytes(2, "big") for r in rows)
+        right = self._rightmost_ink(rows, self.size)
         if self.name == "font16":
-            ink = [x for r in rows for x in range(16) if r & (1 << (15 - x))]
-            width = max(ink) + 2 if ink else self.width(cp)
+            width = right + 2 if right is not None else self.width(cp)
             data += bytes([0x80 | min(width, 16)])
+        else:
+            width = right + 1 if right is not None else self.width(cp)
+            self.fw.write(self.widths_offset + self.glyph(cp), bytes([width]))
         self.fw.write(off, data)
         return True
 

@@ -96,6 +96,52 @@ compares versions (`VERSION_EQUAL`, `VERSION_OLDER`, `VERSION_NEWER`, `VERSION_C
   changes), so the tool's post-install version check must use the capability XML or a vendor
   SCSI command. Find out in M5 (`WmFwUpdater.dll`, USB capture).
 
+## font12 advance widths (2026-10-12, found while checking the font-test photos; not yet in fonts.py)
+
+Why Consolas lost its `l` and `i` and clipped `o`/`b` on the player: font0 keeps each glyph's
+advance in a **separate 1-byte-per-glyph table after the bitmaps**, which the sheet importer never
+writes, so replacement glyphs are clipped to Sony's widths (the diag12 photo shows the solid `A`
+block cut to ~8 px, Sony's `A` width 7 plus spacing). The TrueType rendering itself is fine.
+
+Layout of font0 (blob at `0x559b9c`), corrected: a u16 table of **8,439** entries (U+0020-U+20F6,
+last real entry `table[8438] = 423`), then **424 glyphs** of 24 bytes starting at `0x55dd8a` (2 bytes
+earlier than fonts.py assumes, so every glyph is really one row lower: row 0 and row 11 blank), then
+**424 width bytes at `0x56054a`** (`width[glyph]`, 2-12; rightmost ink + 1 for 406 of 418 ASCII/Latin
+glyphs; space = 5), then the CJK structures from `0x5606f2`. Fix: on font12 import, write
+`width[glyph] = rightmost ink + 1`; read it back for `preview`/`width()`; shift the glyph base by -2.
+
+## Volume limit (2026-10-12, from disassembly of stage 3 v1.01; patches not yet tested on a player)
+
+Thumb-2 via capstone, addresses are run addresses (`section` = stage 3 section index). A Gemini
+read-only pass the same evening found the right routine in section 35 but misread it; what follows
+was checked against the bytes.
+
+- **Settings block at SRAM `0x4b70`** (literal in 30+ sections). `+0x4e` is the master volume,
+  0-30. `+0x4a` is a byte that gates the limit: `0` means limited. Nothing in stage 3 writes it
+  with an immediate offset, so it probably arrives with the block from flash (a region or
+  destination byte?). Section 13 at `0x306c6d2` also uses it (values 0/1 vs 3 vs other) to pick a
+  date layout, so it is not a plain on/off AVLS flag.
+- **The cap is 17** (`0x11`), applied when `+0x4a == 0`:
+  - boot, section 10 `0x306ea96`: if the byte is 0, call `0x3064b66` and clamp volume > 17 to 17;
+  - section 0 `0x3064b66`: adds elapsed time to a u32 counter at `+0x57` (cumulative listening
+    time, guarded by a once-flag at `0x63f4`); also called from sections 17, 24, 25;
+  - section 0 `0x3064b8e`: "may the volume exceed 17?" - returns 0 only when the byte is 0, the
+    volume is above 17 and `+0x56` is set. Called from the volume-key handler in section 24
+    (`0x306e2a2`, `0x30708fe`, `0x307126e`), which pops the dialog with string 63
+    "Check the\volume level" (string 150 is the "AVLS (Vol. Limit)" menu item);
+  - section 10 `0x306eb16`: a handler that resets the volume to 13 and sets `+0x56` - probably the
+    rollback when the counter expires; not traced further;
+  - section 34 `0x306c7d8`: a handler (also reached via a pointer in section 6's data) that clamps
+    volume > 18 to 17 regardless of the byte, then shows something via section 57.
+- **Section 35 `0x307890e` is not the cap.** It runs only when EqMode == 5 and lowers the EQ's
+  `max_DbGain` from 12 dB to 2 dB in steps as the volume rises (a harder ladder when the byte is
+  0), i.e. headroom so a boosted EQ does not clip. Patching it out makes nothing louder.
+- The ACodec block is at `0x40090000` (section 0 literal pools around `0x3052168`, `0x30523c8`);
+  which register is what is unknown, so analog gain is not something to touch blind.
+- `mods/volume-limit/patches.tsv` flips the two decision points (sections 0 and 10) to the
+  "byte != 0" path; the section 34 clamp is left in as a commented second step. `nwe39x build`
+  applies `patches.tsv` from a mod (old bytes must match), `nwe39x diff --patches` names them.
+
 ## Not known yet
 
 - The USB command Sony's tool sends to start the install (would allow flashing without Sony's tool).

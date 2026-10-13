@@ -18,8 +18,23 @@ def test_font12_table_lookup(image_bytes):
     fw = Firmware.from_bytes(image_bytes)
     f = fonts.Font.font12(fw)
     assert f.has(ord("A")) and not f.has(0x7F) and not f.has(0x10)
-    rows = f.rows(ord("A"))  # glyph = table[0x21] + 32 = 65
-    assert rows[0] == 0x8000 >> (65 % 12)
+    rows = f.rows(ord("A"))  # glyph = table[0x21] = 33
+    assert rows[0] == 0x8000 >> (33 % 12)
+    assert f.width(ord("A")) == 33 % 12 + 1 and f.width(ord(" ")) == 5
+
+
+def test_font12_import_writes_width(image_bytes, tmp_path):
+    fw = Firmware.from_bytes(image_bytes)
+    f = fonts.Font.font12(fw)
+    img = Image.new("L", (12, 12), 0)
+    for x in range(2, 8):
+        img.putpixel((x, 4), 255)  # ink in columns 2-7
+    assert f.set_image(ord("A"), img)
+    assert f.width(ord("A")) == 8  # rightmost ink 7, plus 1
+    diff = [i for i in range(len(image_bytes)) if fw.buf[i] != image_bytes[i]]
+    off = f.offset(ord("A"))
+    assert all(off <= i < off + 24 or i == f.widths_offset + 33 for i in diff)
+    assert not f.set_image(ord(" "), Image.new("L", (12, 12), 0)) and f.width(ord(" ")) == 5
 
 
 @pytest.mark.parametrize("name", ["16", "12"])
@@ -72,6 +87,8 @@ def test_stock_fonts(stock_bytes, tmp_path):
     f16, f12 = fonts.Font.font16(fw), fonts.Font.font12(fw)
     assert f16.has(0xAC00) and f16.has(0x4E00) and f16.width(ord("A")) == 8
     assert f12.has(ord("A")) and f12.has(0x0104) and f12.has(0x0410)
+    assert f12.glyph_count == 424 and f12.widths_offset == 0x56054A and f12.width(ord("A")) == 7
+    assert f12.rows(ord("A"))[0] == 0 and f12.rows(ord("A"))[11] == 0  # blank top and bottom rows
     for f in (f16, f12):
         fonts.export_sheet(f, fonts.parse_range("ascii") + fonts.parse_range("cyrillic"), tmp_path / f"{f.name}.png")
         assert fonts.import_sheet(fw, tmp_path / f"{f.name}.png") == []
