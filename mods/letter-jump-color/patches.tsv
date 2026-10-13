@@ -1,0 +1,4 @@
+# The song list's letter jump draws its current letter in gold (RGB565 0xf5e0) set in code, so
+# themes cannot reach it. One movw immediate; README has the bytes for every preset.
+# section	run address	old	new	note
+20	306f234	4ff2e050	44f2a670	letter-jump letter colour: gold 0xf5e0 -> matrix green 0x47a6

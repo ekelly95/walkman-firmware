@@ -29,7 +29,7 @@ inside it, and installs the result. The player still runs Sony's firmware, with 
 
 | | |
 |---|---|
-| **Colour themes** | ten presets (`mods/theme-*`): mono, ice, sony-blue, purple, mint, rose, amber, matrix, neon, ghost; or any hue. Themes recolour pictures only: the highlighted letter in the song list's letter jump is drawn by code and stays Sony's gold |
+| **Colour themes** | ten presets (`mods/theme-*`): mono, ice, sony-blue, purple, mint, rose, amber, matrix, neon, ghost; or any hue. Themes recolour pictures only: the highlighted letter in the song list's letter jump is drawn by code and stays Sony's gold unless you add `mods/letter-jump-color` (a code patch) |
 | **Fonts** | replace the 12 px menu font or the 16 px font from a TrueType or BDF bitmap font |
 | **Boot and power-off screens** | from your own picture (128x160) |
 | **Text** | any interface string, in any of the 13 languages |
