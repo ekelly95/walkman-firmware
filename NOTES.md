@@ -213,16 +213,36 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
   it did reboot into the installer), still on 1.12 with the same DEVINFO, and the image file was
   deleted. So the pre-write checks work from our flasher and a rejected image costs nothing.
 
-## Picture drawing: not found yet (2026-10-12)
+## Picture drawing and the UI layout (2026-10-12, Ghidra: `ghidra/Xrefs.java`, `work/ghidra/out/pictures.c`)
 
-Tried: picture numbers as immediates and as byte/u16/u32 tables, picture data and entry offsets,
-the small-ID functions at `0x3066950`/`0x306696c`/`0x3066992`/`0x30669b0` (those are an event
-bitset: set, test-and-clear, clear, test), and the resource reader `0x3066c34(type, offset, size,
-buf)` (the 16-byte reads near it in sections 24 and 31 are library-database sectors at logical
-address `0x10000000 + sector*512`). Next approach: start from the LCD side. `AnnotateRknano.java`
-already names `lcd_fill_rect_maybe` and `lcd_flush_maybe`; the blit that copies RGB565 rows into
-the frame buffer is the one routine every picture goes through, and its callers lead back to the
-picture loader and the layout tables.
+Pictures are drawn by index after all, through two section 0 routines (names now in
+`AnnotateRknano.java`):
+
+- `draw_picture_at(index, x, y)` at `0x3062400` and `draw_picture(index, dx, dy)` at `0x3062212`
+  (the stored x,y of the entry plus an offset). Both read the 16-byte entry at
+  `ImageLogicAddress + 0x20 + 16*index` and call `blit_picture_rows(x, y, w, h, offset)` at
+  `0x3062110`, which streams the RGB565 rows from NAND in 512-byte chunks into
+  `lcd_blit(x, y, w, h, 16, rows)` (`0x306200a`, the function the notes used to call
+  `lcd_fill_rect_maybe`; with bpp 1 it draws glyph bitmaps). `ImageLogicAddress` is RAM `0x4b5c`,
+  set by `image_select(n)` in section 1 (`0x306c9cc`), which reads the firmware header and takes
+  the offset of `imageres[n]`; the resource reader `0x3066c34(0x30000, offset, len, buf)` reads
+  the firmware image region of NAND at that offset. The earlier searches failed because the
+  index is a plain first argument and sits in registers or tables far from the call.
+- **List screens** (music menu in section 18 `0x306cc70`, the same geometry in sections 20, 22,
+  25, 28, 29, 31, 33, 34): title bar = picture 107 at (0,14); rows are 26 px tall starting at
+  y=30; per row: separator 133 at y+25, highlight bar **109** on the selected row at (0,y), icon
+  at (6, y+3), text at x=28 with a 12 px font. So the highlight look is one picture (109), and the
+  gold bars 106/108/110-117 are the same bar for other screens.
+- **The music menu table** is at section 18 data `0x3023010`: six entries of `{u16 picture, u16
+  string id}` = (119, 56 All Songs), (118, 58 Album), (120, 57 Artist), (125, 59 Genre),
+  (129, 60 Playlists), (124, 61 Folder). Editing it reorders the menu, swaps icons, or (with the
+  row count byte it is drawn from) hides entries. Other menus use the same shape in their own
+  section's data.
+- Status bar: 188 is the background at (0,0); 216/217 play/pause at x=0; 191/198 at (14,0);
+  219 at (26,0); 218 AVLS at (88,2); 215 HOLD at (16,0). Now-playing: 179 and the 149-159
+  arrows at y=134; album-art frame 139 with the Walkman logo 185 or 229 (refresh) in a grid.
+  Charging: battery 96 at (29,39), 97/98 at (8|64,110). EQ screen (section 34): 102, 104, 101.
+- The test patterns 087-091 are still never drawn, which confirms they are unused.
 
 ## Not known yet
 - Brick recovery: Rockbox `utils/rknanoutils/rkload` loads code over USB in the RKnano boot-ROM
