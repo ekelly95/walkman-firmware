@@ -1,0 +1,2 @@
+name = "no-fm-settings"
+patches = ["patches.tsv"]   # from `nwe39x menu settings-hide "FM Radio"`

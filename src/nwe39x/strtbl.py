@@ -1,9 +1,14 @@
 """strtbl0, the firmware's UI text.
 
 Layout (NW-E390 1.01): u16 language count (13), then one u32 offset per language (relative to the
-blob). Each language block is 181 records of 242 bytes: a 42-byte header (u16 record id, then
-u16 links to neighbouring records, 0xffff = none) and a 200-byte UTF-16LE text slot, so up to 99
-characters plus a terminating NUL. In the text, a backslash is a line break.
+blob). Each language block is 181 records of 242 bytes: a 42-byte header and a 200-byte UTF-16LE
+text slot, so up to 99 characters plus a terminating NUL. In the text, a backslash is a line break.
+
+The header is 21 u16s (0xffff = none): record id, parent, index in parent, first child, previous,
+next, value, child count, then up to 13 children. It is the Settings menu: record 110 "Settings"
+is the root, its children are the submenus, and leaves carry a value (the option's index). The
+Settings screen (section 34) walks it through `read_record_header` (section 0 `0x3061f08`). The
+headers are the same in every language block.
 
 Mods are TSV files: one `lang<TAB>record<TAB>text` per line, `#` starts a comment.
 """
@@ -11,9 +16,10 @@ Mods are TSV files: one `lang<TAB>record<TAB>text` per line, `#` starts a commen
 from __future__ import annotations
 
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import patches
 from .rknanofw import Firmware, FirmwareError
 
 LANGS = ["de", "en", "es", "fr", "it", "pl", "pt", "ru", "tr", "ja", "ko", "zh-Hans", "zh-Hant"]
@@ -21,6 +27,8 @@ RECORD = 242
 HEAD = 42
 SLOT = RECORD - HEAD
 MAX_CHARS = SLOT // 2 - 1
+NONE = 0xFFFF
+MAX_CHILDREN = 13
 
 
 @dataclass
@@ -29,6 +37,33 @@ class Text:
     record: int
     text: str
     offset: int  # absolute offset of the text slot in the firmware file
+
+
+@dataclass
+class Node:
+    """One record header. Links are record numbers, None where the header has 0xffff."""
+    record: int
+    parent: int | None
+    index: int | None
+    first_child: int | None
+    prev: int | None
+    next: int | None
+    value: int | None
+    count: int | None
+    children: list[int] = field(default_factory=list)
+    label: str = ""
+
+    @classmethod
+    def unpack(cls, raw: bytes, label: str = "") -> Node:
+        f = [None if v == NONE else v for v in struct.unpack_from(f"<{HEAD // 2}H", raw)]
+        return cls(*f[:8], [c for c in f[8:] if c is not None], label)
+
+    def pack(self) -> bytes:
+        if len(self.children) > MAX_CHILDREN:
+            raise FirmwareError(f"record {self.record} has {len(self.children)} children; the limit is {MAX_CHILDREN}")
+        f = [self.record, self.parent, self.index, self.first_child, self.prev, self.next, self.value, self.count]
+        f += self.children + [None] * (MAX_CHILDREN - len(self.children))
+        return struct.pack(f"<{HEAD // 2}H", *(NONE if v is None else v for v in f))
 
 
 def _layout(fw: Firmware) -> tuple[int, list[int], int]:
@@ -54,6 +89,35 @@ def texts(fw: Firmware, lang: str | None = None) -> list[Text]:
             slot = base + offsets[li] + r * RECORD + HEAD
             raw = bytes(fw.buf[slot:slot + SLOT])
             out.append(Text(code, r, raw.decode("utf-16-le").split("\0")[0], slot))
+    return out
+
+
+def tree(fw: Firmware, lang: str = "en") -> dict[int, Node]:
+    """Every record's header, labelled with its text in `lang`."""
+    base, offsets, records = _layout(fw)
+    li = LANGS.index(lang)
+    out = {}
+    for r in range(records):
+        at = base + offsets[li] + r * RECORD
+        raw = bytes(fw.buf[at:at + RECORD])
+        out[r] = Node.unpack(raw, raw[HEAD:].decode("utf-16-le").split("\0")[0])
+    return out
+
+
+def header_patches(fw: Firmware, nodes: list[Node], note: str = "") -> list[patches.Patch]:
+    """File patches that write these headers into every language block (where they differ)."""
+    base, offsets, records = _layout(fw)
+    out = []
+    for node in nodes:
+        if not 0 <= node.record < records:
+            raise FirmwareError(f"no record {node.record}")
+        new = node.pack()
+        for lang, off in zip(LANGS, offsets):
+            at = base + off + node.record * RECORD
+            old = bytes(fw.buf[at:at + HEAD])
+            if old != new:
+                out.append(patches.Patch(patches.FILE, at, old, new,
+                                         f"{note}record {node.record} ({node.label}) header, {lang}"))
     return out
 
 

@@ -75,13 +75,10 @@ be `file` for an absolute offset. Old bytes must match or the build refuses. `bu
 
 ## Open items, in the order I would take them
 
-1. **Settings menu table** (in progress, not found). The generic list drawer in section 0
-   (`0x305cce6`) takes a u16 array `[title, row ids...]` in r5 from its caller. The Settings
-   array is not in any section's code or data as u16, u8, at any constant offset, or as
-   immediates near string calls; exhaustive scans are in the session notes below. Next: find the
-   callers of `0x305cce6` with Xrefs, read how each builds r5, and follow the Settings one (it may
-   be built on the stack from a packed table or by a loop). Deliverable: `nwe39x menu` grows a
-   `settings` target, same patch mechanism as `menus.py`.
+1. **Settings menu** (done in code, not yet on the device): it is a tree in the string table's
+   record headers; see NOTES.md. `nwe39x menu settings` / `settings-hide`; `mods/no-fm-settings`
+   is in my-walkman as 1.18. Still to check on the player: 5 rows, every submenu opens, the cursor
+   comes back to the right row, Equalizer and Language still work.
 2. **Volume follow-up on the device**: does anything still pull the volume down after a long
    session or a headphone replug? If yes, enable the commented section 34 line in
    `mods/volume-limit/patches.tsv`. Also: what writes settings `+0x4a`.

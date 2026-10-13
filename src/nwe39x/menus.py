@@ -92,6 +92,79 @@ def hide(fw: Firmware, names: list[str]) -> list[patches.Patch]:
     return out
 
 
+# The Settings menu is a tree in the string table's record headers (see strtbl.py), rooted here.
+SETTINGS = 110
+
+
+def settings_menu(fw: Firmware) -> dict[int, strtbl.Node]:
+    nodes = strtbl.tree(fw)
+    if SETTINGS not in nodes or not nodes[SETTINGS].children:
+        raise FirmwareError(f"record {SETTINGS} is not the Settings menu in this image")
+    return nodes
+
+
+def walk(nodes: dict[int, strtbl.Node], record: int = SETTINGS, depth: int = 0):
+    """(depth, node) for the subtree at `record`, in menu order."""
+    yield depth, nodes[record]
+    for c in nodes[record].children:
+        yield from walk(nodes, c, depth + 1)
+
+
+def hide_settings(fw: Firmware, names: list[str]) -> list[patches.Patch]:
+    """Patches that drop the named submenus (matched case-insensitively against their labels)
+    from the Settings menu. Options (leaves with a value) cannot be hidden: their row is the
+    setting's value. The hidden records stay in the table, unreachable."""
+    nodes = settings_menu(fw)
+    subs = [n for _, n in walk(nodes) if n.record != SETTINGS and n.value is None]
+    targets = []
+    for name in names:
+        hits = [n for n in subs if name.lower() in n.label.lower()]
+        if len(hits) != 1:
+            raise FirmwareError(f"{name!r} matches {', '.join(n.label for n in hits) or 'no submenu'}; "
+                                "submenus are " + ", ".join(n.label for n in subs))
+        targets.append(hits[0])
+
+    edited: dict[int, strtbl.Node] = {}
+
+    def get(r: int) -> strtbl.Node:
+        return edited.get(r, nodes[r])
+
+    def edit(r: int) -> strtbl.Node:
+        if r not in edited:
+            n = nodes[r]
+            edited[r] = strtbl.Node(**{**n.__dict__, "children": list(n.children)})
+        return edited[r]
+
+    hidden: set[int] = set()
+    for t in targets:
+        if t.record in hidden:
+            continue
+        hidden |= {n.record for _, n in walk(nodes, t.record)}
+        parent = edit(t.parent)
+        if len(parent.children) < 2:
+            raise FirmwareError(f"{parent.label} needs at least one entry")
+        parent.children.remove(t.record)
+        parent.count, parent.first_child = len(parent.children), parent.children[0]
+        for i, c in enumerate(parent.children):
+            if get(c).index != i:
+                edit(c).index = i
+        t = get(t.record)  # earlier splices may have moved its links
+        if t.prev is not None and get(t.prev).next == t.record:
+            edit(t.prev).next = t.next
+        if t.next is not None and get(t.next).prev == t.record:
+            edit(t.next).prev = t.prev
+
+    for r in list(edited):  # nothing still shown may point at a hidden record
+        if r in hidden:
+            del edited[r]
+    view = {**nodes, **edited}
+    for _, n in walk(view):
+        links = [n.parent, n.first_child, n.prev, n.next, *n.children]
+        if any(x in hidden for x in links if x is not None):
+            raise FirmwareError(f"record {n.record} ({n.label}) still links to a hidden record")
+    return strtbl.header_patches(fw, sorted(edited.values(), key=lambda n: n.record), "settings menu: ")
+
+
 def write_tsv(path: Path, plist: list[patches.Patch], header: str):
     lines = [f"# {header}", "# section\trun address\told\tnew\tnote"]
     lines += [f"{'file' if p.section == patches.FILE else p.section}\t{p.addr:x}\t{p.old.hex()}\t{p.new.hex()}\t{p.note}" for p in plist]

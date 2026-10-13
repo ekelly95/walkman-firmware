@@ -12,6 +12,8 @@
   nwe39x bootscreen PHOTO OUT.png          make a 128x160 boot picture from a photo
   nwe39x menu show                         the home menu's entries (id, icon, label)
   nwe39x menu hide NAME... -o FILE.tsv     patches that drop entries from the home menu
+  nwe39x menu settings                     the Settings menu tree (from the string table)
+  nwe39x menu settings-hide NAME... -o F   patches that drop submenus from Settings
   nwe39x theme NAME DIR                    recolour every UI picture into DIR (presets: mono, ice, purple,
                                            amber, ... ; or hue --hue DEG; --sheet PNG for a preview)
   nwe39x build --mod DIR                   patched updater in out/updater from DIR's mod.toml (includes,
@@ -138,6 +140,24 @@ def cmd_menu_hide(args):
         raise FirmwareError("nothing to hide")
     menus.write_tsv(Path(args.out), plist, "home menu without " + ", ".join(args.names) + " (nwe39x menu hide)")
     print(f"wrote {len(plist)} patches to {args.out}: {plist[0].note}")
+
+
+def cmd_menu_settings(args):
+    fw = Firmware.load(stock_image(args))
+    nodes = menus.settings_menu(fw)
+    sys.stdout.reconfigure(errors="replace")  # language names on a cp1252 console
+    for depth, n in menus.walk(nodes):
+        value = "" if n.value is None else f"  = {n.value}"
+        print(f"  {'  ' * depth}{n.record:3d}  {n.label.replace(chr(92), ' ')}{value}")
+
+
+def cmd_menu_settings_hide(args):
+    fw = Firmware.load(stock_image(args))
+    plist = menus.hide_settings(fw, args.names)
+    if not plist:
+        raise FirmwareError("nothing to hide")
+    menus.write_tsv(Path(args.out), plist, "Settings menu without " + ", ".join(args.names) + " (nwe39x menu settings-hide)")
+    print(f"wrote {len(plist)} patches to {args.out}")
 
 
 def cmd_strings_export(args):
@@ -331,7 +351,7 @@ def main(argv: list[str] | None = None):
     image_args(p)
     p.set_defaults(func=cmd_fonts_preview)
 
-    menu = sub.add_parser("menu", help="the home menu").add_subparsers(dest="menu_cmd", required=True)
+    menu = sub.add_parser("menu", help="the home and Settings menus").add_subparsers(dest="menu_cmd", required=True)
     p = menu.add_parser("show", help="list the home menu's entries")
     image_args(p)
     p.set_defaults(func=cmd_menu_show)
@@ -340,6 +360,14 @@ def main(argv: list[str] | None = None):
     p.add_argument("-o", "--out", required=True, help="patches.tsv to write (use it with build --patches)")
     image_args(p)
     p.set_defaults(func=cmd_menu_hide)
+    p = menu.add_parser("settings", help="print the Settings menu tree")
+    image_args(p)
+    p.set_defaults(func=cmd_menu_settings)
+    p = menu.add_parser("settings-hide", help="write patches that drop submenus from the Settings menu")
+    p.add_argument("names", nargs="+", help='submenu labels to drop, e.g. "FM Radio"')
+    p.add_argument("-o", "--out", required=True, help="patches.tsv to write (use it with build --patches)")
+    image_args(p)
+    p.set_defaults(func=cmd_menu_settings_hide)
 
     p = sub.add_parser("theme", help="recolour the UI pictures into a folder for `build --images`")
     p.add_argument("theme", choices=["hue", *themes.PRESETS], help="hue: rotate colours by --hue DEG; or a preset: "

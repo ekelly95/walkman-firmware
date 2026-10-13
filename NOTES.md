@@ -256,14 +256,36 @@ Pictures are drawn by index after all, through two section 0 routines (names now
   (`0x306c882` .. `0x306c922`). `nwe39x menu hide FM` rewrites the table, those constants and the
   kept icons' slots; verified on the player as 1.13.
 
-## Settings menu table: not found yet (2026-10-13)
+## Settings menu: a tree in the string table (2026-10-13)
 
-The generic list drawer in section 0 (`0x305cce6`) takes a u16 array `[title, row string ids...]`
-through r5 from its caller (rows: `ldrh r0, [r5 + 2*row]`, see section 28 `0x3070ec4` for the same
-shape). Looked for the Settings array (110; 111, 128, 135, 142, 148, 167) in every section's code
-and data as u16 and u8, at any constant offset, by its spacing pattern, and as immediates near
-the string routines: nothing but codec coefficients. So it is assembled at runtime. Next: Xrefs
-`callers@0x305cce6`, read how each caller fills r5, follow the one that ends up titled 110.
+The Settings menu is not a table in stage 3. It is the string table's record headers (strtbl0):
+each 242-byte record starts with 21 u16s (0xffff = none) `{id, parent, index in parent, first
+child, prev, next, value, child count, children[13]}`, then the 200-byte text. Record 110
+"Settings" is the root, with children 111 Music, 128 Photo, 135 FM Radio, 142 Sleep Timer,
+148 Common and 167 Language Settings. Menu nodes have value 0xffff. Leaves carry a value 0..52,
+the option's setting index, numbered in tree order (113 Normal = 0 ... 180 = 52; 149 Unit
+Information = 26, 163 Brightness = 37, 165/166 Reset/Format = 38/39 are leaves that act). Menu
+siblings are linked by prev/next. Leaves chain across parents (119 On prev = 117). The headers
+are byte-identical in all 13 language blocks; records below 110 are a flat chain.
+
+- Only section 34 (the Settings screen) reads them, through `read_record_header(rec, buf)` at
+  section 0 `0x3061f08` (callers s34 `0x306c592`, `0x306cc18`, `0x306d16a`). It uses `+0x2`
+  (index in parent) to place the cursor, `+0xe` (count; more than 5 rows scroll), and the
+  children. It special-cases record ids 121 Equalizer (`0x306d18e`, the EQ screen) and 167
+  Language (`0x306cc40`). Leaves go through `0x306c908`. At `0x306c57c` it builds a u16 list of
+  `0xa8 + byte` from a byte table (count at RAM `0x550e`), probably the languages on offer.
+- The string fetch `0x3061c82` and `0x3061f08` index the table at RAM `[0x4b58]` + 0x36 with a
+  language stride of 181 records when settings `+0x53` is nonzero and 172 records when it is zero.
+  Probably for another SKU; unknown.
+- `nwe39x menu settings` prints the tree. `nwe39x menu settings-hide NAME` rewrites the parent's
+  children and count, the kept siblings' indices, and the prev/next links around the hidden entry,
+  in every language. Options cannot be hidden (their row is their value). `mods/no-fm-settings`
+  drops FM Radio Settings.
+- Correction: `0x305cce6` is not a list drawer. It is a task callback in section 0's 7-pointer task
+  table (data `0x300450c`). List screens copy small constant templates from section 0's code
+  (`0x3069d54`: the music OPTION menu 112/118/121/85 and the Music list 56-61 with icons
+  119/118/120/125/129/124; `0x3069df4`, `0x306a01c`, ...) to the stack in chunks and point r5 at
+  them, which is why the earlier scans found nothing.
 
 ## Not known yet
 - Brick recovery: Rockbox `utils/rknanoutils/rkload` loads code over USB in the RKnano boot-ROM
