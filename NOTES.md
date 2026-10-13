@@ -200,9 +200,13 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
   `reference/rockbox/`): the RKnano boot ROM enumerates as USB **071b:3226** and takes code by
   vendor control transfer, bRequest 12, wValue 0, wIndex 1137, 4,096-byte chunks, payload
   RC4-scrambled with the rkboottool key plus a 16-bit CRC. How this player enters that mode is
-  still unknown: nothing in stage 3 (the loader is in NAND and is not part of RKNANOFW.IMG). To
-  find out without risk: look for 071b:3226 in Device Manager while holding each key as USB is
-  plugged in. Until then, treat a failed install as unrecoverable.
+  still unknown: nothing in stage 3 (the loader is in NAND and is not part of RKNANOFW.IMG).
+  **Tried 2026-10-12**: player off, one key held while plugging USB in, six keys in six clean
+  cycles watched on the USB bus; every time the normal 054c:0b83 drive came back and the player
+  showed its "Connected USB" screen, never 071b:3226. So no key at plug-in enters the loader.
+  The remaining trigger is presumably a NAND without a valid firmware header (the boot ROM's own
+  fallback), which cannot be tested safely. Treat a failed install as unrecoverable; keep every
+  build inside the installer's checks and `flash`'s verification; no patches that touch boot.
 - **Stock restore kept ready**: `out/stock-restore` (stock 1.01 image as 1.13); `nwe39x flash
   --updater out/stock-restore` puts the player back. Rebuild with `nwe39x restore -o
   out/stock-restore --version N` when the version falls behind (cosmetic only: the installer
