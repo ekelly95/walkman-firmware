@@ -1,13 +1,15 @@
 # Handoff: walkman-firmware (nwe39x)
 
+*Development notes, written to brief an AI coding session on the project; users want the README.*
+
 Paste this into a new session. It is the state of the project as of 2026-10-13 and how to work on it.
 
 ## What this is
 
 Firmware modding tools for Sony's NW-E393/E394/E395 Walkman (Rockchip RKnano SoC, Rockchip's own
-RTOS, ARM Thumb-2). Repo: `C:\Users\edmun\Projects\walkman-firmware` (private GitHub
-`ekelly95/walkman-firmware`, branch `main`). Python 3.12, `uv`, package `nwe39x` in `src/`,
-CLI `uv run nwe39x ...`. Tests: `uv run pytest -q` (73 pass). **NOTES.md is the knowledge base**:
+RTOS, ARM Thumb-2). Repo: GitHub `ekelly95/walkman-firmware`, branch `main`; work from its root.
+Python 3.12, `uv`, package `nwe39x` in `src/`, CLI `uv run nwe39x ...`. Tests:
+`uv run pytest -q` (80 pass). **NOTES.md is the knowledge base**:
 every reverse-engineering fact, with addresses, lives there; read it first and keep it current.
 
 The player (one unit, serial in `nwe39x devinfo`) is on **1.20 = `mods/my-walkman`**: dark

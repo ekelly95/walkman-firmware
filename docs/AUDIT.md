@@ -1,6 +1,8 @@
 # Audit prompt: walkman-firmware
 
-Paste this into a fresh session in `C:\Users\edmun\Projects\walkman-firmware`. Read
+*Development notes: a prompt for an AI review session, kept with the code it reviews.*
+
+Paste this into a fresh session at the repository root. Read
 `docs/HANDOFF.md` first for context, then do the audit below. Report findings ranked by
 severity, each with the file and line or the firmware address, what is wrong, how you confirmed
 it, and the fix. Confirm against the bytes or the code before reporting; a claim that does not
