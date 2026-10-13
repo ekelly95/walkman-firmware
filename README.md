@@ -102,6 +102,28 @@ Before it touches the player, `flash` refuses:
 
 Then it shows what it is about to install, on which player, and waits for you to type `flash`.
 
+## Make your own boot screen
+
+![A boot screen and a power-off screen made from photos, captioned "Hello Again" and "See You Later"](docs/bootscreen-demo.png)
+
+*Boot and power-off screens from photos by [Jack Young](https://unsplash.com/photos/green-northern-lights-xGltqb1ChYw)
+and [Alex Middleton](https://unsplash.com/photos/green-light-in-dark-room-aka-hHVgZQ8) on Unsplash, captioned in
+Terminus. Shown at 2x; the screen is 128x160.*
+
+Any photo can be the boot screen (picture 044) or the power-off screen (083), with your own words
+in place of "For Music Lovers, By Music Lovers":
+
+```
+uv run nwe39x bootscreen photo.jpg mine/044.png --caption "Hello Again" --preview boot-preview.png
+uv run nwe39x bootscreen photo2.jpg mine/083.png --caption "See You Later" --focus 0.75,0.75 --zoom 1.6
+uv run nwe39x build --images mine -o out/mine
+```
+
+`--caption` takes lines separated by `|`, `--focus` (fractions across and down) and `--zoom` choose
+the crop, and `--font`/`--font-size` set the caption font. `--preview` writes a 3x enlargement to
+check before you build. [mods/bootscreen-photo](mods/bootscreen-photo) has the exact commands for
+the screens above.
+
 ## More
 
 - [mods/README.md](mods/README.md): the mods, how to combine them, and how to make your own.

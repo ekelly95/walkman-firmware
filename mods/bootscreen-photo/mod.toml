@@ -1,0 +1,2 @@
+name = "bootscreen-photo"
+images = ["images"]   # from `nwe39x bootscreen`, see README
