@@ -10,9 +10,9 @@ RTOS, ARM Thumb-2). Repo: `C:\Users\edmun\Projects\walkman-firmware` (private Gi
 CLI `uv run nwe39x ...`. Tests: `uv run pytest -q` (52 pass). **NOTES.md is the knowledge base**:
 every reverse-engineering fact, with addresses, lives there; read it first and keep it current.
 
-The player (one unit, serial in `nwe39x devinfo`) is on **1.17 = `mods/my-walkman`**: dark
+The player (one unit, serial in `nwe39x devinfo`) is on **1.20 = `mods/my-walkman`**: dark
 theme, Terminus 12 in the menu font, matching boot/power-off screens, volume cap off, FM Radio
-dropped from the home menu. Sony's stock image is 1.01; our versions only count upward so Unit
+dropped from the home menu and from Settings. Sony's stock image is 1.01; our versions only count upward so Unit
 Information tells builds apart (the installer itself never checks versions).
 
 ## Daily commands
@@ -75,10 +75,11 @@ be `file` for an absolute offset. Old bytes must match or the build refuses. `bu
 
 ## Open items, in the order I would take them
 
-1. **Settings menu** (done in code, not yet on the device): it is a tree in the string table's
-   record headers; see NOTES.md. `nwe39x menu settings` / `settings-hide`; `mods/no-fm-settings`
-   is in my-walkman as 1.18. Still to check on the player: 5 rows, every submenu opens, the cursor
-   comes back to the right row, Equalizer and Language still work.
+1. **Settings menu**: done, verified on the player as 1.20. The menu is a tree in the string
+   table's record headers (NOTES.md); `nwe39x menu settings` / `settings-hide`;
+   `mods/no-fm-settings` is in my-walkman. Hiding FM from the home menu also needed the OK
+   dispatch table and the returning cursor fixed (both now in `menu hide`; FM had opened from
+   Settings since 1.13).
 2. **Volume follow-up on the device**: does anything still pull the volume down after a long
    session or a headphone replug? If yes, enable the commented section 34 line in
    `mods/volume-limit/patches.tsv`. Also: what writes settings `+0x4a`.
