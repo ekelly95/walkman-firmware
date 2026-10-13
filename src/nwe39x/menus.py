@@ -34,6 +34,40 @@ COUNT_SITES = [
 # OK on the home screen dispatches on the cursor slot, not the entry id: `tbb [pc, slot]` at
 # 0x306C594 over this 6-byte table of handlers in id order (0x306C600, slot 3, opens Settings).
 DISPATCH = 0x306C598
+# Apps return to the home screen with the entry id to highlight; on entry it stores that byte as
+# the cursor slot (`ldrb r0, [r5]; ldr r1, =0x3023050; strb r0, [r1]` at RECEIVE). When entries
+# are hidden, those 4 bytes become a `bl` to a helper that maps id -> slot, placed in a hidden
+# entry's handler (dead once the dispatch table no longer points at it).
+RECEIVE = 0x306C4B6
+CURSOR = 0x3023050
+CAVES = {2: (0x306C5D8, 40)}  # id -> (handler address, bytes up to the next handler)
+
+
+def thumb_bl(from_addr: int, to_addr: int) -> bytes:
+    off = to_addr - (from_addr + 4)
+    if off & 1 or not -(1 << 24) <= off < (1 << 24):
+        raise FirmwareError(f"bl from {from_addr:#x} to {to_addr:#x} is out of range")
+    s = (off >> 24) & 1
+    i1, i2 = (off >> 23) & 1, (off >> 22) & 1
+    j1, j2 = (1 - i1) ^ s, (1 - i2) ^ s
+    hw1 = 0xF000 | s << 10 | (off >> 12) & 0x3FF
+    hw2 = 0xD000 | j1 << 13 | j2 << 11 | (off >> 1) & 0x7FF
+    return struct.pack("<2H", hw1, hw2)
+
+
+def cursor_helper(at: int, slots: bytes) -> bytes:
+    """Thumb code for `r0 = slots[byte [r5]] if < 6 else byte [r5]; r1 = &cursor; return`,
+    with its 6-byte table and the literal, 28 bytes. `at` must be 4-aligned."""
+    assert at % 4 == 0 and len(slots) == COUNT
+    code = struct.pack("<7H",
+                       0x7828,  # ldrb r0, [r5]
+                       0x2800 | COUNT,  # cmp r0, #6
+                       0xD201,  # bhs +2 (to the ldr)
+                       0xA102,  # adr r1, table (at+16)
+                       0x5C08,  # ldrb r0, [r1, r0]
+                       0x4903,  # ldr r1, [pc, #12] (the literal at at+24)
+                       0x4770)  # bx lr
+    return code + b"\x00\xbf" + slots + b"\x00\x00" + struct.pack("<I", CURSOR)
 
 
 def _read(fw: Firmware, section: int, addr: int, size: int) -> bytes:
@@ -89,6 +123,19 @@ def hide(fw: Firmware, names: list[str]) -> list[patches.Patch]:
     old_jumps = _read(fw, SECTION, DISPATCH, COUNT)
     new_jumps = bytes(old_jumps[e.id] for e in keep) + bytes([old_jumps[keep[-1].id]]) * (COUNT - n)
     out.append(patches.Patch(SECTION, DISPATCH, old_jumps, new_jumps, "home menu: OK dispatch follows the kept entries"))
+    kept_ids = [e.id for e in keep]
+    cave = next((CAVES[e.id] for e in entries if e.id not in kept_ids and e.id in CAVES), None)
+    if cave:
+        at, size = cave
+        slots = bytes(kept_ids.index(i) if i in kept_ids else min(i, n - 1) for i in range(COUNT))
+        helper = cursor_helper(at, slots)
+        assert len(helper) <= size
+        out.append(patches.Patch(SECTION, at, _read(fw, SECTION, at, len(helper)), helper,
+                                 "home menu: id -> slot helper for the returning cursor"))
+        out.append(patches.Patch(SECTION, RECEIVE, _read(fw, SECTION, RECEIVE, 4), thumb_bl(RECEIVE, at),
+                                 "home menu: returning cursor goes through the helper"))
+    else:
+        print("note: no free handler for the cursor helper; returning to the home menu may highlight the wrong slot")
     for addr, kind, delta in COUNT_SITES:
         out.append(patches.Patch(SECTION, addr, _encode(kind, COUNT + delta), _encode(kind, n + delta),
                                  f"home menu count {COUNT}->{n} ({kind})"))

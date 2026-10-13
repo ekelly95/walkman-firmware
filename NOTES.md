@@ -255,7 +255,12 @@ Pictures are drawn by index after all, through two section 0 routines (names now
   cursor *slot*, not the id: `ldrsb r1, [0x3023050]` then `tbb [pc, r1]` at `0x306c594` over a
   6-byte table at `0x306c598`, with handlers in id order (slot 3 `0x306c600` sends message 9 with
   record 110, the Settings tree). `menu hide` reorders that table too; before 1.19 it did not, so
-  Settings in slot 2 opened FM Radio. The count 6 lives in eight Thumb-1 immediates
+  Settings in slot 2 opened FM Radio. Apps return with message 0 and the *id* to highlight. The home
+  screen stores it as the slot at `0x306c4b6` (`ldrb r0,[r5]; ldr r1,=0x3023050; strb r0,[r1]`).
+  Since 1.20, `menu hide` turns those first 4 bytes into `bl` to a 28-byte id -> slot helper placed
+  in the dead FM handler (`0x306c5d8`, 40 bytes, unreachable once the dispatch table skips it). No
+  other section 17 code branches there. Other overlays share the address, but they are not loaded
+  with section 17. The count 6 lives in eight Thumb-1 immediates
   (`0x306c882` .. `0x306c922`). `nwe39x menu hide FM` rewrites the table, those constants and the
   kept icons' slots; verified on the player as 1.13.
 

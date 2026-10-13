@@ -32,9 +32,20 @@ def test_stock_home_menu(stock_bytes):
     assert [e.id for e in entries] == list(range(6))
     plist = menus.hide(fw, ["FM"])
     assert plist[0].section == 17 and len(plist[0].old) == 36
-    assert len([p for p in plist if p.section == 17]) == 10  # table + dispatch + 8 count sites
+    assert len([p for p in plist if p.section == 17]) == 12  # table, dispatch, cursor helper + bl, 8 count sites
     assert len([p for p in plist if p.section == patches.FILE]) == 6  # 3 kept entries x icon pair
     patches.apply(fw, plist)
     assert [e.label for e in menus.home_menu(fw)][:5] == ["Photos", "Music", "Settings", "Playlists", "Go to song playback\screen"]
     with pytest.raises(FirmwareError):
         menus.hide(Firmware.from_bytes(stock_bytes), ["Bluetooth"])
+
+
+def test_thumb_bl():
+    assert menus.thumb_bl(0x306C4B6, 0x306C5D8) == bytes.fromhex("00f08ff8")
+    assert menus.thumb_bl(0x306C5D8, 0x306C4B6) == bytes.fromhex("fff76dff")
+
+
+def test_cursor_helper_layout():
+    code = menus.cursor_helper(0x306C5D8, bytes([0, 1, 2, 2, 3, 4]))
+    assert len(code) == 28 and code[16:22] == bytes([0, 1, 2, 2, 3, 4])
+    assert code[24:] == (0x3023050).to_bytes(4, "little")
