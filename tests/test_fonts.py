@@ -125,3 +125,76 @@ def test_advance_alone_rewrites_width(image_bytes):
     assert not f.set_image(ord("A"), img)  # same rows, no advance: untouched
     assert f.set_image(ord("A"), img, advance=6) and f.width(ord("A")) == 6
     assert not f.set_image(ord("A"), img, advance=6)
+
+
+BDF = """STARTFONT 2.1
+FONT -test-tiny-medium-r-normal--8-80-75-75-c-50-iso10646-1
+SIZE 8 75 75
+FONTBOUNDINGBOX 5 8 0 -2
+STARTPROPERTIES 4
+FONT_ASCENT 6
+FONT_DESCENT 2
+CHARSET_REGISTRY "ISO10646"
+CHARSET_ENCODING "1"
+ENDPROPERTIES
+CHARS 3
+STARTCHAR A
+ENCODING 65
+SWIDTH 500 0
+DWIDTH 5 0
+BBX 3 3 1 0
+BITMAP
+40
+A0
+E0
+ENDCHAR
+STARTCHAR g
+ENCODING 103
+DWIDTH 4 0
+BBX 2 3 0 -2
+BITMAP
+C0
+40
+C0
+ENDCHAR
+STARTCHAR unmapped
+ENCODING -1
+DWIDTH 4 0
+BBX 1 1 0 0
+BITMAP
+80
+ENDCHAR
+ENDFONT
+"""
+
+
+def test_parse_bdf():
+    bdf = fonts.parse_bdf(BDF)
+    assert (bdf.ascent, bdf.descent) == (6, 2) and sorted(bdf.glyphs) == [65, 103]
+    assert bdf.glyphs[65].bbx == (3, 3, 1, 0) and bdf.glyphs[65].rows == [0x40, 0xA0, 0xE0]
+    with pytest.raises(FirmwareError, match="charset"):
+        fonts.parse_bdf(BDF.replace('"ISO10646"', '"KOI8"').replace('"1"', '"R"'))
+
+
+@pytest.mark.parametrize("advance, want", [(None, 5), ("ink", 4), (6, 6)])
+def test_sheet_from_bdf(image_bytes, tmp_path, advance, want):
+    fw = Firmware.from_bytes(image_bytes)
+    f = fonts.Font.font12(fw)
+    (tmp_path / "t.bdf").write_text(BDF)
+    n, clipped = fonts.sheet_from_bdf(f, tmp_path / "t.bdf", [65, 103, 0x2603], tmp_path / "t.png", advance=advance)
+    assert n == 2 and clipped == []  # U+2603 is in neither font
+    fonts.import_sheet(fw, tmp_path / "t.png")
+    img = f.image(65)
+    # baseline = ascent 6: the 3-row A sits on rows 3-5, x offset 1
+    assert [img.getpixel((x, 3)) for x in range(4)] == [0, 0, 255, 0]
+    assert [img.getpixel((x, 5)) for x in range(5)] == [0, 255, 255, 255, 0]
+    assert f.width(65) == want
+    g = f.image(103)
+    assert g.getpixel((0, 5)) == 255 and g.getpixel((1, 7)) == 255  # descends 2 below the baseline
+
+
+def test_sheet_from_bdf_reports_clipping(image_bytes, tmp_path):
+    fw = Firmware.from_bytes(image_bytes)
+    (tmp_path / "t.bdf").write_text(BDF)
+    _, clipped = fonts.sheet_from_bdf(fonts.Font.font12(fw), tmp_path / "t.bdf", [65, 103], tmp_path / "t.png", base=11)
+    assert clipped == [103]  # g's descender falls below row 11

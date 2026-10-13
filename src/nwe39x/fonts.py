@@ -15,7 +15,8 @@ Hangul parts of font0 follow the width table and are not decoded yet.
 Sheets are PNGs with one glyph per cell; the font and code points are stored in the PNG's text
 metadata so an edited sheet imports back to the same characters. An optional "advance" in the
 metadata gives every glyph of the sheet that advance width instead of one computed from its ink
-(`fonts from-ttf --advance N`, for a monospace rhythm).
+(`fonts from-ttf --advance N`, for a monospace rhythm); "widths" ({code point: width}) does the
+same per glyph (`fonts from-bdf` keeps the BDF's own advance widths that way).
 """
 
 from __future__ import annotations
@@ -201,7 +202,8 @@ def import_sheet(fw: Firmware, path: Path) -> list[int]:
     changed = []
     for i, cp in enumerate(meta["cps"]):
         x, y = 1 + (i % cols) * cell, 1 + (i // cols) * cell
-        if font.set_image(cp, img.crop((x, y, x + font.size, y + font.size)), meta.get("advance")):
+        advance = meta.get("advance") or meta.get("widths", {}).get(str(cp))
+        if font.set_image(cp, img.crop((x, y, x + font.size, y + font.size)), advance):
             changed.append(cp)
     return changed
 
@@ -224,22 +226,132 @@ def sheet_from_ttf(font: Font, ttf: Path, cps: list[int], path: Path, size: int 
     cps = [cp for cp in cps if font.has(cp)]
     face = ImageFont.truetype(str(ttf), size or font.size - 3)
     base = baseline(font) if base is None else base
-    cell = font.size + 1
-    rows = (len(cps) + cols - 1) // cols
-    sheet = Image.new("L", (cols * cell + 1, rows * cell + 1), GRID)
-    for i, cp in enumerate(cps):
+    glyphs = {}
+    for cp in cps:
         glyph = Image.new("L", (font.size, font.size), PAPER)
         draw = ImageDraw.Draw(glyph)
         draw.fontmode = "1"
         draw.text((1, base), chr(cp), font=face, fill=INK, anchor="ls")
-        sheet.paste(glyph, (1 + (i % cols) * cell, 1 + (i // cols) * cell))
-    meta = PngInfo()
-    info = {"font": font.name, "cols": cols, "cps": cps, "source": Path(ttf).name}
+        glyphs[cp] = glyph
+    info = {"source": Path(ttf).name}
     if advance is not None:
         info["advance"] = advance
-    meta.add_text(META_KEY, json.dumps(info))
+    return _save_sheet(font, glyphs, path, cols, info)
+
+
+def _save_sheet(font: Font, glyphs: dict[int, Image.Image], path: Path, cols: int, info: dict) -> int:
+    cell = font.size + 1
+    rows = (len(glyphs) + cols - 1) // cols
+    sheet = Image.new("L", (cols * cell + 1, rows * cell + 1), GRID)
+    for i, glyph in enumerate(glyphs.values()):
+        sheet.paste(glyph, (1 + (i % cols) * cell, 1 + (i // cols) * cell))
+    meta = PngInfo()
+    meta.add_text(META_KEY, json.dumps({"font": font.name, "cols": cols, "cps": list(glyphs), **info}))
     sheet.save(path, pnginfo=meta)
-    return len(cps)
+    return len(glyphs)
+
+
+@dataclass
+class BdfGlyph:
+    cp: int
+    dwidth: int
+    bbx: tuple[int, int, int, int]  # w, h, x offset, y offset (from the baseline, up)
+    rows: list[int]                 # one int per row, MSB = leftmost of `bits` bits
+    bits: int
+
+
+@dataclass
+class Bdf:
+    name: str
+    ascent: int
+    descent: int
+    glyphs: dict[int, BdfGlyph]
+
+
+def parse_bdf(text: str) -> Bdf:
+    """The parts of a BDF 2.1 file a sheet needs. Only Unicode (ISO10646) and Latin-1 (ISO8859-1)
+    encodings, where ENCODING is the code point."""
+    props, glyphs = {}, {}
+    lines = iter(text.splitlines())
+    if not next(lines, "").startswith("STARTFONT"):
+        raise FirmwareError("not a BDF font (no STARTFONT)")
+    cur = None
+    for line in lines:
+        key, _, rest = line.strip().partition(" ")
+        if cur is None:
+            if key == "STARTCHAR":
+                cur = {"rows": []}
+            elif key in ("FONT", "CHARSET_REGISTRY", "CHARSET_ENCODING", "FONT_ASCENT", "FONT_DESCENT",
+                         "FONTBOUNDINGBOX"):
+                props[key] = rest.strip().strip('"')
+        elif key == "ENCODING":
+            cur["cp"] = int(rest.split()[0])
+        elif key == "DWIDTH":
+            cur["dwidth"] = int(rest.split()[0])
+        elif key == "BBX":
+            cur["bbx"] = tuple(int(v) for v in rest.split()[:4])
+        elif key == "BITMAP":
+            cur["bitmap"] = True
+        elif key == "ENDCHAR":
+            if cur.get("cp", -1) >= 0 and "bbx" in cur:
+                bits = 4 * len(cur["rows"][0]) if cur["rows"] else 0
+                glyphs[cur["cp"]] = BdfGlyph(cur["cp"], cur.get("dwidth", 0), cur["bbx"],
+                                             [int(r, 16) for r in cur["rows"]], bits)
+            cur = None
+        elif cur.get("bitmap") and key:
+            cur["rows"].append(key)
+    charset = props.get("CHARSET_REGISTRY", "ISO10646").upper() + "-" + props.get("CHARSET_ENCODING", "1")
+    if charset not in ("ISO10646-1", "ISO8859-1"):
+        raise FirmwareError(f"BDF charset {charset} is not Unicode or Latin-1; convert it to ISO10646 first")
+    box = [int(v) for v in props.get("FONTBOUNDINGBOX", "0 0 0 0").split()]
+    ascent = int(props.get("FONT_ASCENT", box[1] + box[3]))
+    descent = int(props.get("FONT_DESCENT", -box[3]))
+    return Bdf(props.get("FONT", ""), ascent, descent, glyphs)
+
+
+def sheet_from_bdf(font: Font, bdf_path: Path, cps: list[int], path: Path, cols: int = 16,
+                   base: int | None = None, advance: int | str | None = None) -> tuple[int, list[int]]:
+    """Copy a BDF bitmap font's glyphs into a glyph sheet, pixel for pixel, on `base` (default: the
+    BDF's ascent when ascent + descent fit the cell, else the firmware font's baseline). Widths:
+    the BDF's DWIDTH per glyph (default), "ink" for rightmost ink + 1, or a number for all.
+    Returns (glyph count, code points whose pixels did not fit the cell)."""
+    bdf = parse_bdf(Path(bdf_path).read_text(encoding="latin-1"))
+    if base is None:
+        base = bdf.ascent if 0 < bdf.ascent + bdf.descent <= font.size else baseline(font)
+    if isinstance(advance, int) and not 1 <= advance <= font.size:
+        raise FirmwareError(f"advance {advance} is outside 1-{font.size} for {font.name}")
+    if advance not in (None, "ink") and not isinstance(advance, int):
+        raise FirmwareError(f"advance must be a number or 'ink', not {advance!r}")
+    glyphs, widths, clipped = {}, {}, []
+    for cp in cps:
+        g = bdf.glyphs.get(cp)
+        if g is None or not font.has(cp):
+            continue
+        w, h, xo, yo = g.bbx
+        img = Image.new("L", (font.size, font.size), PAPER)
+        top = base - yo - h
+        lost = False
+        for r, bits in enumerate(g.rows[:h]):
+            for c in range(w):
+                if bits >> (g.bits - 1 - c) & 1:
+                    x, y = xo + c, top + r
+                    if 0 <= x < font.size and 0 <= y < font.size:
+                        img.putpixel((x, y), INK)
+                    else:
+                        lost = True
+        if lost:
+            clipped.append(cp)
+        glyphs[cp] = img
+        if g.dwidth > 0:
+            widths[str(cp)] = min(g.dwidth, font.size)
+    if not glyphs:
+        raise FirmwareError(f"{Path(bdf_path).name} has none of those characters that {font.name} has")
+    info = {"source": Path(bdf_path).name}
+    if isinstance(advance, int):
+        info["advance"] = advance
+    elif advance is None:
+        info["widths"] = widths
+    return _save_sheet(font, glyphs, path, cols, info), clipped
 
 
 def preview(font: Font, text: str, scale: int = 3) -> Image.Image:

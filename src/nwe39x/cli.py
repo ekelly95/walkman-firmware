@@ -9,6 +9,7 @@
   nwe39x strings export FILE.tsv           every UI string, all 13 languages
   nwe39x fonts export SHEET.png            glyph sheet (--font 16|12, --range ascii|cyrillic|...)
   nwe39x fonts preview "text" OUT.png      render text with the firmware's own glyphs
+  nwe39x fonts from-bdf FONT.bdf OUT.png   glyph sheet from a BDF bitmap font (--font 12|16, --advance)
   nwe39x bootscreen PHOTO OUT.png          make a 128x160 boot picture from a photo
   nwe39x menu show                         the home menu's entries (id, icon, label)
   nwe39x menu hide NAME... -o FILE.tsv     patches that drop entries from the home menu
@@ -180,6 +181,18 @@ def cmd_fonts_from_ttf(args):
     print(f"wrote {n} glyphs from {Path(args.ttf).name} to {args.out}")
 
 
+def cmd_fonts_from_bdf(args):
+    fw = Firmware.load(stock_image(args))
+    font = fonts.Font.by_name(fw, args.font)
+    advance = int(args.advance) if args.advance and args.advance.isdigit() else args.advance
+    n, clipped = fonts.sheet_from_bdf(font, Path(args.bdf), fonts.parse_range(args.range), Path(args.out),
+                                      base=args.baseline, advance=advance)
+    print(f"wrote {n} glyphs from {Path(args.bdf).name} to {args.out}")
+    if clipped:
+        print(f"warning: {len(clipped)} glyphs do not fit the {font.size} px cell and were clipped: "
+              + " ".join(chr(cp) for cp in clipped[:40]))
+
+
 def cmd_fonts_preview(args):
     fw = Firmware.load(stock_image(args))
     fonts.preview(fonts.Font.by_name(fw, args.font), args.text).save(args.out)
@@ -346,6 +359,15 @@ def main(argv: list[str] | None = None):
     p.add_argument("--advance", type=int, help="advance width for every glyph, space included (monospace); default: rightmost ink + 1")
     image_args(p)
     p.set_defaults(func=cmd_fonts_from_ttf)
+    p = fnt.add_parser("from-bdf", help="copy a BDF bitmap font into a glyph sheet")
+    p.add_argument("bdf")
+    p.add_argument("out")
+    p.add_argument("--font", default="12", help="16 or 12")
+    p.add_argument("--range", default="ascii")
+    p.add_argument("--baseline", type=int, help="baseline row (default: the BDF's ascent, if the font fits the cell)")
+    p.add_argument("--advance", help="widths: the BDF's own (default), 'ink' for rightmost ink + 1, or N for all")
+    image_args(p)
+    p.set_defaults(func=cmd_fonts_from_bdf)
     p = fnt.add_parser("preview", help="render text with the firmware's glyphs")
     p.add_argument("text", help='a backslash starts a new line')
     p.add_argument("out")
