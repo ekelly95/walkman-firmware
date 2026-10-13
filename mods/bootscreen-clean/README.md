@@ -7,5 +7,5 @@ by `scripts/bootscreen_clean.py` and not committed:
 
 ```
 uv run python -I scripts/bootscreen_clean.py extract/cab/Data/Device/RKNANOFW.IMG mods/bootscreen-clean/images mods/font-terminus/fonts/font12_terminus.png
-nwe39x build --images mods/theme-dark/images --images mods/bootscreen-clean/images --fonts mods/font-terminus/fonts --patches mods/volume-limit/patches.tsv --patches mods/no-fm/patches.tsv -o out/combo
+nwe39x build --mod mods/my-walkman -o out/my-walkman
 ```

@@ -1,0 +1,3 @@
+# The build that is on the player: everything below, applied in this order.
+name = "my-walkman"
+include = ["../theme-dark", "../bootscreen-clean", "../font-terminus", "../volume-limit", "../no-fm"]

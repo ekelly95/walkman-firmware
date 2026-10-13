@@ -1,0 +1,2 @@
+name = "bootscreen-clean"
+images = ["images"]   # from scripts/bootscreen_clean.py

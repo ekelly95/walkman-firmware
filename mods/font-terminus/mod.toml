@@ -1,0 +1,2 @@
+name = "font-terminus"
+fonts = ["fonts"]   # font12_terminus.png from `nwe39x fonts from-ttf`, see README

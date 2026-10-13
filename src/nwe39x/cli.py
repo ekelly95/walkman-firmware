@@ -14,9 +14,8 @@
   nwe39x menu hide NAME... -o FILE.tsv     patches that drop entries from the home menu
   nwe39x theme NAME DIR                    recolour every UI picture into DIR (presets: mono, ice, purple,
                                            amber, ... ; or hue --hue DEG; --sheet PNG for a preview)
-  nwe39x build --mod DIR                   patched updater in out/updater from DIR/images/*.png,
-                                           DIR/strings.tsv, DIR/fonts/*.png and DIR/patches.tsv
-                                           (version from the player)
+  nwe39x build --mod DIR                   patched updater in out/updater from DIR's mod.toml (includes,
+                                           theme, images, fonts, strings, patches); version from the player
   nwe39x restore                           Sony's stock firmware, re-versioned so it installs over a mod
   nwe39x flash [IMG]                       install a built image directly (copy + START FW UPDATE over SCSI)
   nwe39x devinfo                           the DEVINFO block the player returns over SCSI
@@ -28,7 +27,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import bootscreen, device, flash, fonts, imageres, menus, patches, strtbl, themes, updater
+from . import bootscreen, device, flash, fonts, imageres, menus, modspec, patches, strtbl, themes, updater, verify
 from .rknanofw import Firmware, FirmwareError, stage_sections
 
 DEFAULT_EXTRACT = Path("extract")
@@ -81,48 +80,14 @@ def cmd_diff(args):
     """Name every region of a built image that differs from Sony's, so nothing changes by accident."""
     stock = Firmware.load(args.cab / updater.IMG)
     fw = Firmware.load(args.target)
-    if len(fw.buf) != len(stock.buf):
-        raise FirmwareError("images differ in size")
-    regions = [(p.offset, p.offset + p.size, f"picture {p.index:03d}") for p in imageres.pictures(stock)]
-    for f in args.patches or []:
-        regions += patches.regions(stock, patches.parse_tsv(Path(f)))
-    regions += [(t.offset, t.offset + strtbl.SLOT, f"string {t.lang}:{t.record} ({t.text!r})") for t in strtbl.texts(stock)]
-    m = updater.VERSION_RE.search(bytes(stock.buf))
-    regions += [(m.start(1), m.end(1), "firmware version (XML)"), (4, 8, "header version"),
-                (stock.size_field + 4, stock.size_field + 8, "backup header version"),
-                (len(stock.buf) - 4, len(stock.buf), "CRC")]
-    f16, f12 = fonts.Font.font16(stock), fonts.Font.font12(stock)
-    f12_glyph_cp = {v: i + 0x20 for i, v in enumerate(f12.table) if v != 0xFFFF}
-    f12_data, f12_widths = f12.glyphs_offset, f12.widths_offset
-
-    def glyph_at(i: int) -> tuple[str, int] | None:
-        if f16.blob_offset <= i < f16.blob_offset + f16.blob_size:
-            return "font16", (i - f16.blob_offset) // 33
-        if f12_data <= i < f12_widths:
-            cp = f12_glyph_cp.get((i - f12_data) // fonts.FONT12_RECORD)
-            return ("font12", cp) if cp is not None else None
-        if f12_widths <= i < f12_widths + f12.glyph_count:
-            cp = f12_glyph_cp.get(i - f12_widths)
-            return ("font12 widths", cp) if cp is not None else None
-        return None
-
-    hits, glyphs, unknown = {}, {}, []
-    for i in (i for i in range(len(stock.buf)) if fw.buf[i] != stock.buf[i]):
-        name = next((n for s, e, n in regions if s <= i < e), None)
-        if name:
-            hits[name] = hits.get(name, 0) + 1
-        elif g := glyph_at(i):
-            glyphs.setdefault(g[0], set()).add(g[1])
-        else:
-            unknown.append(i)
-    for name, n in hits.items():
-        print(f"  {name}: {n} bytes")
-    for font, cps in glyphs.items():
-        print(f"  {font}: {len(cps)} glyphs, U+{min(cps):04X}..U+{max(cps):04X}")
-    if unknown:
-        print(f"  UNEXPECTED: {len(unknown)} bytes outside known regions, first at {unknown[0]:#x}")
+    patch_files = list(args.patches or [])
+    if not patch_files and (manifest := verify.read_manifest(Path(args.target).parent.parent.parent)):
+        patch_files = manifest["patches"]
+    rep = verify.explain(stock, fw, patch_files)
+    for line in rep.lines():
+        print("  " + line)
     print("checks: " + ("pass" if not fw.problems() else "; ".join(fw.problems())))
-    if unknown:
+    if rep.unknown:
         sys.exit(1)
 
 
@@ -202,34 +167,26 @@ def cmd_fonts_preview(args):
 
 def cmd_build(args):
     fw = Firmware.load(stock_image(args))
-    images, strings, font_dir, patch_files = list(args.images or []), args.strings, args.fonts, list(args.patches or [])
+    n, patch_files, mod = 0, [], None
     if args.mod:
-        mod = Path(args.mod)
-        if (mod / "images").is_dir():
-            images.insert(0, mod / "images")
-        if (mod / "patches.tsv").is_file():
-            patch_files.insert(0, mod / "patches.tsv")
-        strings = strings or (mod / "strings.tsv" if (mod / "strings.tsv").is_file() else None)
-        font_dir = font_dir or (mod / "fonts" if (mod / "fonts").is_dir() else None)
-    pics = [i for d in images for i in imageres.import_dir(fw, Path(d))]
-    texts = strtbl.import_tsv(fw, Path(strings)) if strings else []
-    glyphs = [cp for sheet in sorted(Path(font_dir).glob("*.png")) for cp in fonts.import_sheet(fw, sheet)] if font_dir else []
-    code = [p for f in patch_files for p in patches.apply(fw, patches.parse_tsv(Path(f)))]
-    if not pics and not texts and not glyphs and not code:
+        mod = modspec.load(Path(args.mod))
+        print(mod.describe())
+        n += modspec.apply(fw, mod)
+        patch_files += mod.all_patch_files()
+    extra = modspec.Mod(Path("."), "command line", images=[Path(d) for d in args.images or []],
+                        fonts=[Path(args.fonts)] if args.fonts else [], strings=[Path(args.strings)] if args.strings else [],
+                        patches=[Path(f) for f in args.patches or []])
+    n += modspec.apply(fw, extra)
+    patch_files += extra.patches
+    if not n:
         raise FirmwareError("nothing to change; give --mod, --images, --strings, --fonts or --patches (or use `restore`)")
-    if pics:
-        print(f"pictures replaced: {', '.join(map(str, pics))}")
-    if texts:
-        print(f"strings changed: {', '.join(f'{lang}:{r}' for lang, r in texts)}")
-    if glyphs:
-        print(f"glyphs changed: {len(glyphs)}")
-    for p in code:
-        print(f"code patched: {p}")
-    _write(args, fw)
+    version = _write(args, fw)
+    verify.write_manifest(args.out, version, patch_files, mod.name if mod else None)
 
 
 def cmd_restore(args):
-    _write(args, Firmware.load(stock_image(args)))
+    version = _write(args, Firmware.load(stock_image(args)))
+    verify.write_manifest(args.out, version, [], "stock")
 
 
 FLASH_TIPS = """\
@@ -239,11 +196,11 @@ If Sony's tool says "failed ... unknown error", check `nwe39x status` before ret
 reports the new version if the install worked."""
 
 
-def _write(args, fw: Firmware):
+def _write(args, fw: Firmware) -> str:
     version = pick_version(args, fw)
-    exe = updater.build(args.cab, fw, version, args.out)
-    print(f"ready: run {exe} with the player connected (installs as {version})")
-    print(FLASH_TIPS)
+    updater.build(args.cab, fw, version, args.out)
+    print(f"ready: `nwe39x flash --updater {args.out}` installs it as {version}")
+    return version
 
 
 def cmd_status(args):
@@ -276,6 +233,17 @@ def cmd_flash(args):
         img = args.updater / updater.IMG
     if not img.exists():
         raise FirmwareError(f"{img} not found; build it first or pass IMG")
+    if not args.force:
+        stock = args.cab / updater.IMG
+        manifest = verify.read_manifest(img.parent.parent.parent)
+        if not stock.exists():
+            raise FirmwareError(f"{stock} not found to verify against; pass --force to skip the check")
+        rep = verify.explain(Firmware.load(stock), Firmware.load(img), manifest["patches"] if manifest else [])
+        for line in rep.lines():
+            print("  " + line)
+        if rep.unknown:
+            raise FirmwareError(f"{len(rep.unknown)} changed bytes are not explained by the build's manifest"
+                                " (first at {:#x}); not flashing. Pass --force if you mean it.".format(rep.unknown[0]))
     p = one_player(args)
     version = flash.flash(img, p.root, wait=not args.no_wait)
     if version:
@@ -311,6 +279,8 @@ def main(argv: list[str] | None = None):
     p.add_argument("--updater", type=Path, default=DEFAULT_OUT, help="build folder holding Data/Device/RKNANOFW.IMG")
     p.add_argument("--drive", help="player's drive, e.g. D:/")
     p.add_argument("--no-wait", action="store_true", help="return right after sending the command")
+    p.add_argument("--force", action="store_true", help="flash even if the image changes bytes the build did not declare")
+    p.add_argument("--cab", type=Path, default=DEFAULT_EXTRACT / "cab", help="unpacked updater folder (stock image to verify against)")
     p.set_defaults(func=cmd_flash)
 
     p = sub.add_parser("diff", help="list what a built image changes compared with Sony's")
@@ -395,7 +365,7 @@ def main(argv: list[str] | None = None):
         p = sub.add_parser(name, help=helptext)
         image_args(p)
         if name == "build":
-            p.add_argument("--mod", help="mod folder with images/, strings.tsv, fonts/ and/or patches.tsv")
+            p.add_argument("--mod", help="mod folder: mod.toml (see modspec.py), or images/, fonts/, strings.tsv, patches.tsv")
             p.add_argument("--images", action="append", help="folder of NNN.png / NNN_*.png pictures to swap in (repeatable; later folders win)")
             p.add_argument("--strings", help="TSV of lang<TAB>record<TAB>text lines")
             p.add_argument("--fonts", help="folder of glyph sheets from `nwe39x fonts export`")

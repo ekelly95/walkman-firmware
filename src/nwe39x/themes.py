@@ -107,3 +107,17 @@ def generate(fw: Firmware, outdir: Path, fn, skip: set[int] = ARTWORK, sheet: Pa
     if sheet:
         imageres.contact_sheet(previews).save(sheet)
     return changed
+
+
+def apply(fw: Firmware, fn, skip: set[int] = ARTWORK) -> list[int]:
+    """Recolour the pictures in place (no folder). Returns the indices that changed."""
+    changed = []
+    for p in imageres.pictures(fw):
+        if p.index in skip:
+            continue
+        src = imageres.decode(fw, p)
+        new = imageres.encode(fn(src))
+        if new != bytes(fw.buf[p.offset:p.offset + p.size]):
+            fw.write(p.offset, new)
+            changed.append(p.index)
+    return changed
