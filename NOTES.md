@@ -3,6 +3,9 @@
 Source: Sony's `NW-E390_V1_01.exe` (7,669,504 bytes, sha256 `870121a0...c809a4`), firmware
 1.01 for NW-E393/E394/E395. Never executed; unpacked as data.
 
+Early entries name `tools/*.py` scripts from before the `nwe39x` CLI; those jobs are now
+`nwe39x unpack`, `images`, `bootscreen`, `build` and `restore`.
+
 ## Unpacking
 
 1. The .exe is an InstallShield SFX. One real CAB at offset `0x485d8` (7,365,077 bytes);

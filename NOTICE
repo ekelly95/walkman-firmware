@@ -9,3 +9,5 @@ GPL-2.0-or-later.
 This repository contains no Sony software or firmware. The tools read Sony's own updater, which
 you download from Sony, and patch it on your machine. "Sony" and "Walkman" are trademarks of
 Sony Group Corporation; this project is not affiliated with or endorsed by Sony.
+docs/theme_presets.png shows recoloured excerpts of the player's interface pictures, generated
+from Sony's updater, to illustrate what the themes do.

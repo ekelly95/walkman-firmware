@@ -14,7 +14,7 @@ folder without a mod.toml uses its own images/, fonts/, strings.tsv and patches.
 ```
 nwe39x build --mod mods/my-walkman -o out/my-walkman      # version: one above the player's
 nwe39x diff out/my-walkman/Data/Device/RKNANOFW.IMG       # every changed byte, named
-nwe39x flash --updater out/my-walkman --allow-code-patches  # it has OS patches (volume-limit, no-fm)
+nwe39x flash --updater out/my-walkman --allow-code-patches  # it has OS patches (volume-limit, letter-jump-color)
 ```
 
 `build` writes `manifest.json` beside the image (version, mod, patch files used); `diff` and
@@ -32,3 +32,4 @@ no-fm patches, the clean boot screens) are not committed; each mod's README says
 | no-fm | FM Radio dropped from the home menu |
 | no-fm-settings | FM Radio Settings dropped from the Settings menu |
 | font-test | Comic Sans / Consolas: which screens use which font |
+| font-diag, font-diag12 | test-pattern glyph sheets (committed; `scripts/font_diag.py` makes them) showing which part of a glyph cell the player draws |

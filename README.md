@@ -6,7 +6,7 @@ NW-E395** Walkman, made by editing Sony's own firmware updater on your PC.
 ![The ten colour presets applied to a sample of the player's UI pictures](docs/theme_presets.png)
 
 *The colour presets, applied to a sample of the player's interface pictures (`nwe39x theme NAME
-DIR --sheet`). This is a contact sheet of the pictures, not a photo of the screen.*
+DIR --sheet SHEET.png`). This is a contact sheet of the pictures, not a photo of the screen.*
 
 > [!WARNING]
 > **Experimental, and there is no recovery.** If an install leaves the player unable to start,
@@ -29,7 +29,7 @@ inside it, and installs the result. The player still runs Sony's firmware, with 
 
 | | |
 |---|---|
-| **Colour themes** | ten presets (`mods/theme-*`): mono, ice, sony-blue, purple, mint, rose, amber, matrix, neon, ghost; or any hue. Themes recolour pictures only: the highlighted letter in the song list's letter jump is drawn by code and stays Sony's gold unless you add `mods/letter-jump-color` (a code patch) |
+| **Colour themes** | ten presets, each with a `mods/theme-*` folder (mono's is `theme-dark`): mono, ice, sony-blue, purple, mint, rose, amber, matrix, neon, ghost; or any hue. Themes recolour pictures only: the highlighted letter in the song list's letter jump is drawn by code and stays Sony's gold unless you add `mods/letter-jump-color` (a code patch) |
 | **Fonts** | replace the 12 px menu font or the 16 px font from a TrueType or BDF bitmap font |
 | **Boot and power-off screens** | from your own picture (128x160) |
 | **Text** | any interface string, in any of the 13 languages |
@@ -54,8 +54,9 @@ If you try it on an untested combination, please open an issue with the model, t
 ## First run: a colour theme
 
 You need Windows, [uv](https://docs.astral.sh/uv/) (it installs Python for you), and Sony's
-updater for the NW-E390 series, version 1.01: `NW-E390_V1_01.exe` from Sony's support site. Check
-the file before using it:
+updater for the NW-E390 series, version 1.01: `NW-E390_V1_01.exe`. Find it on Sony's support site
+for your country under your model (NW-E393, NW-E394 or NW-E395), in its software and firmware
+downloads. Check the file before using it:
 
 ```
 certutil -hashfile NW-E390_V1_01.exe SHA256
@@ -80,6 +81,8 @@ uv run nwe39x flash --updater out/theme-ice        # 4. install; type "flash" wh
 
 The install takes about 15 seconds. The player disconnects, installs, restarts and comes back
 reporting the new version. Leave it plugged in and don't touch the drive until `flash` finishes.
+
+No administrator rights are needed, and installs leave your music and playlists alone.
 
 **Going back to Sony's look:** `uv run nwe39x flash --updater out/stock-restore`. This works for any
 player that still starts; it can't help one that doesn't.
