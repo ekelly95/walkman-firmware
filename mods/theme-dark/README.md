@@ -1,6 +1,6 @@
 # theme-dark
 
-Monochrome UI: the gold highlight bars, icons and battery frame become light grey; the red alert
+Monochrome UI: the gold highlight bars, icons and battery frame become light gray; the red alert
 and low-battery rings stay red. The pictures are generated, not committed:
 
 ```

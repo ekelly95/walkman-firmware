@@ -4,18 +4,18 @@ from nwe39x import imageres, themes
 from nwe39x.rknanofw import Firmware
 
 
-def test_mono_greys_gold_but_keeps_red():
+def test_mono_grays_gold_but_keeps_red():
     img = Image.new("RGB", (2, 1))
     img.putpixel((0, 0), (255, 180, 0))  # gold
     img.putpixel((1, 0), (220, 20, 20))  # red
     out = themes.mono(img)
     r, g, b = out.getpixel((0, 0))
-    assert r == g == b  # grey
+    assert r == g == b  # gray
     r, g, b = out.getpixel((1, 0))
     assert r > 200 and g < 40 and b < 40  # still red (HSV round trip may move it a notch)
 
 
-def test_hue_shift_keeps_greys_and_moves_colours():
+def test_hue_shift_keeps_grays_and_moves_colors():
     img = Image.new("RGB", (2, 1))
     img.putpixel((0, 0), (128, 128, 128))
     img.putpixel((1, 0), (255, 0, 0))

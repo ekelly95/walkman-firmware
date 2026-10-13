@@ -123,7 +123,7 @@ u16 languages                   13
 u32 offset[languages]           from the start of the blob; first is 0x36
 languages × 181 × record:
     u16 id                      0..180
-    20 × u16 links              neighbouring record ids, 0xffff = none
+    20 × u16 links              neighboring record ids, 0xffff = none
     200 bytes text              UTF-16LE, NUL-terminated, zero-filled (99 characters max)
 ```
 
@@ -145,7 +145,7 @@ count × entry:
 ```
 
 Pixels are **RGB565, big-endian**, rows top to bottom. Notable pictures: 044 the boot screen
-(128×160), 083 the power-off screen (128×160), and full-screen factory test patterns (colour bars,
+(128×160), 083 the power-off screen (128×160), and full-screen factory test patterns (color bars,
 diagonal stripes).
 
 ## 8. Fonts

@@ -30,7 +30,7 @@ public class AnnotateRknano extends GhidraScript {
         {"", "0x3058086", "file_rename_maybe",
             "(\"DEFAULT XML\", dir, L\"default-capability.xml\", ...): recreates the capability file after an install"},
         {"", "0x306200a", "lcd_blit",
-         "(x, y, w, h, bpp, pixels): bpp 16 = RGB565 rows, bpp 1 = glyph bitmap in fg/bg colours"},
+         "(x, y, w, h, bpp, pixels): bpp 16 = RGB565 rows, bpp 1 = glyph bitmap in fg/bg colors"},
         {"", "0x3062774", "lcd_set_window_maybe", "(x0, y0, x1, y1) before pixel writes"},
         {"", "0x30626cc", "lcd_write_pixel_maybe", "(rgb565)"},
         {"", "0x3062878", "lcd_clear_rect", "(x0, y0, x1, y1): fills black; (0,14,127,159) is the area under the status bar"},

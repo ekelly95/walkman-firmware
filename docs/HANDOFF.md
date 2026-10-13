@@ -103,8 +103,8 @@ changes unless `--allow-code-patches`.
    `12zh`, ranges kana/cjk/hangul/...; see NOTES). The player keeps Terminus regular, ink + 1.
 4. **Whole-language string import** (one TSV per language) in `strtbl.py`.
 5. **Gold letter-jump highlight**: found, not patched. Section 20 `0x306f234`
-   `movw r0, #0xf5e0` (`4ff2e050`) sets the text colour (RAM `0x551c`) for the current letter
-   of the song list's letter jump; NOTES "Text colour" has the encodings for each preset.
+   `movw r0, #0xf5e0` (`4ff2e050`) sets the text color (RAM `0x551c`) for the current letter
+   of the song list's letter jump; NOTES "Text color" has the encodings for each preset.
    `mods/letter-jump-color` carries the patch (matrix green `0x47a6`, `44f2a670`) as an
    opt-in mod, so the themes stay picture-only; a build that includes it needs
    `--allow-code-patches`.
@@ -113,7 +113,7 @@ changes unless `--allow-code-patches`.
 
 ## Session notes worth keeping
 
-- Gemini's earlier analysis got the font cause wrong (it was the width table, not rasterisation)
+- Gemini's earlier analysis got the font cause wrong (it was the width table, not rasterization)
   and the SCSI opcode wrong (`FC 20` is DEVINFO, `FC 04` reboots); don't trust its conclusions
   without checking bytes.
 - Pictures 087-091 (test patterns) are never drawn; there is no factory test mode in stage 3.

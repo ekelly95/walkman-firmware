@@ -24,9 +24,9 @@ no-fm patches, the clean boot screens) are not committed; each mod's README says
 | mod | what |
 |---|---|
 | my-walkman | the build on the player: theme-matrix, letter-jump-color, bootscreen-clean, font-terminus, volume-limit |
-| theme-dark, theme-ice, ... | recolour presets (`nwe39x theme`); pictures only, so the letter-jump highlight stays gold |
-| letter-jump-color | the letter-jump highlight in a theme colour (one code patch; matrix by default) |
-| bootscreen-clean | grey logo, taglines in the UI fonts |
+| theme-dark, theme-ice, ... | recolor presets (`nwe39x theme`); pictures only, so the letter-jump highlight stays gold |
+| letter-jump-color | the letter-jump highlight in a theme color (one code patch; matrix by default) |
+| bootscreen-clean | gray logo, taglines in the UI fonts |
 | font-terminus | Terminus 12 in the menu font |
 | volume-limit | no 17-step cap |
 | no-fm | FM Radio dropped from the home menu |

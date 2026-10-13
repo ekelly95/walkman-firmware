@@ -2,7 +2,7 @@
 
 Drops FM Radio Settings from the Settings menu, to go with `no-fm`. The Settings menu is a tree in
 the string table's record headers (see NOTES.md), so this rewrites the headers of Settings and its
-neighbours in all 13 language blocks: the child list and count, the kept rows' indices, and the
+neighbors in all 13 language blocks: the child list and count, the kept rows' indices, and the
 sibling links around the hidden entry. The FM records stay in the table, unreachable. Regenerate
 after changing the firmware version:
 

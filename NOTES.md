@@ -40,7 +40,7 @@ Early entries name `tools/*.py` scripts from before the `nwe39x` CLI; those jobs
 | imageres0 | `ROCK26IMAGERES`, 234 images: 16-byte entries {u16 w,h,x,y; u32 size, offset}, RGB565 **big-endian** |
 
 Images include the boot screen ("For Music Lovers, By Music Lovers"), the "POWER OFF / See You
-Later" screen, icons, digits, the EQ graph, and factory test patterns (colour bars, diagonals),
+Later" screen, icons, digits, the EQ graph, and factory test patterns (color bars, diagonals),
 so there is probably a hidden test mode.
 
 Firmware strings worth following: "Old version is: %d", "New version is: %d", "Version is not
@@ -193,7 +193,7 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
 
 ## Hidden modes (2026-10-12: looked for a factory test mode; found a demo mode instead)
 
-- **The test patterns (pictures 087-091: colour bars with crosshair, blue/green/red/grey ramps)
+- **The test patterns (pictures 087-091: color bars with crosshair, blue/green/red/gray ramps)
   are not referenced anywhere in stage 3**: not by index (as an immediate, a byte/u16/u32 table or
   a window of values), not by their entry or data offsets. The only matches for 87..91 are a
   coefficient table in section 122. Pictures the UI does use (044 boot, 083 power off) are not
@@ -211,7 +211,7 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
   lsl #2]; cmp r2, r1`); at 15 (`cmp r0, #0xf` at `0x3060402`) the flag at settings `+0x353`
   flips. The table is in SRAM at `0x100`, which no section's data or bss covers, so its contents
   come from outside the image (boot loader parameters?). Entering (`0x30647ca`) sets volume 13,
-  settings `+0x4f = 4`, `+0xa2/+0x9d/+0x9a = 1`, `+0xa7 = 6`, `+0x9c = 0`, then re-initialises
+  settings `+0x4f = 4`, `+0xa2/+0x9d/+0x9a = 1`, `+0xa7 = 6`, `+0x9c = 0`, then re-initializes
   playback; exiting restores. A patch that NOPs the `bne` at `0x3060444` would make any 15
   key presses toggle it, if anyone wants to see what it does.
 - Other hidden strings: "Shutdown because power on with hold key!!!", "Long press back key: Back
@@ -331,31 +331,31 @@ are byte-identical in all 13 language blocks; records below 110 are a flat chain
   119/118/120/125/129/124; `0x3069df4`, `0x306a01c`, ...) to the stack in chunks and point r5 at
   them, which is why the earlier scans found nothing.
 
-## Text colour and the gold letter-jump letter (2026-10-13)
+## Text color and the gold letter-jump letter (2026-10-13)
 
-- **Text colour is a RAM struct at `0x551c`**: u16 foreground `+0`, u16 background `+2`, u16 flags
+- **Text color is a RAM struct at `0x551c`**: u16 foreground `+0`, u16 background `+2`, u16 flags
   `+4` (bit 1 swaps fg/bg, bit 0 = transparent background). The glyph path of `lcd_blit`
   (`0x306200a` with bpp 1) reads it through the literal at section 0 `0x30623f0` and plots each
   pixel with `0x3061db0`. `draw_text(rect, rect, utf16, align)` at section 0 `0x3061774` (align
-  0 left, 1 right, 2 centre) draws in whatever colour is there; callers store the colour first,
+  0 left, 1 right, 2 center) draws in whatever color is there; callers store the color first,
   `strh` to `[0x551c]` (section 20 resets it to white `0xffff` after). 0x551c is in the literal pools
-  of sections 0, 1, 13, 14, 17-20, 22, 24, 25, 28, 29, 31, 33, 34. Colours stored: white
-  `0xffff` (most), grey `0x7bcf` (sections 20, 25), `0x8410` (section 34), and gold `0xf5e0` once.
+  of sections 0, 1, 13, 14, 17-20, 22, 24, 25, 28, 29, 31, 33, 34. Colors stored: white
+  `0xffff` (most), gray `0x7bcf` (sections 20, 25), `0x8410` (section 34), and gold `0xf5e0` once.
 - **The letter jump** is drawn by section 20's song-list routine `0x306e128` (code
   `0x306f096`..`0x306f59c`): picture 106 at (0,30) and separator 133 at (0,54), then three labels
   with `draw_text(..., 2)`: previous letter in (14,36)-(34,48), current letter in (51,36)-(71,48),
-  next letter in (88,36)-(108,48). Labels are `A`-`Z`, `0-9` and `etc.`. Neighbours are white
-  `0xffff` or grey `0x7bcf` (stored from `r4`, `movw r4, #0x7bcf` at `0x306f0c6`).
+  next letter in (88,36)-(108,48). Labels are `A`-`Z`, `0-9` and `etc.`. Neighbors are white
+  `0xffff` or gray `0x7bcf` (stored from `r4`, `movw r4, #0x7bcf` at `0x306f0c6`).
 - **The gold is one instruction**: section 20 `0x306f234` `movw r0, #0xf5e0` = bytes `4f f2 e0 50`
   (file offset `0x4be8e0` in the stock 1.01 image), followed by `strh.w r0, [sl]` (sl = 0x551c)
   and the `draw_text` call at `0x306f244`. `0xf5e0` is RGB (246,190,0). No other section has
   `movw #0xf5e0`. The earlier immediate scan looked for other gold values and missed it.
-- A recolour is a 4-byte patch of the `movw` immediate (T3: `f240 | i<<10 | imm4`,
+- A recolor is a 4-byte patch of the `movw` immediate (T3: `f240 | i<<10 | imm4`,
   `imm3<<12 | rd<<8 | imm8`, little-endian halfwords). The preset accents mapped through
   `themes.py` give: ice `0x05de` -> `40f2de50`, sony-blue `0x029e` -> `40f29e20`, purple
   `0x901e` -> `49f21e00`, mint `0x07af` -> `40f2af70`, rose `0xf00f` -> `4ff20f00`, matrix
   `0x47a6` -> `44f2a670`, mono `0xf7be` -> `4ff2be70` (all checked with capstone as
-  `movw r0, #...`). Patch line: `20	306f234	4ff2e050	40f2de50	letter-jump letter colour`.
+  `movw r0, #...`). Patch line: `20	306f234	4ff2e050	40f2de50	letter-jump letter color`.
   It would be the first code patch in a theme, so a themed build would need
   `--allow-code-patches`. Not added to any mod yet.
 

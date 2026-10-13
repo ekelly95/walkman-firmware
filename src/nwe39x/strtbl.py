@@ -93,7 +93,7 @@ def texts(fw: Firmware, lang: str | None = None) -> list[Text]:
 
 
 def tree(fw: Firmware, lang: str = "en") -> dict[int, Node]:
-    """Every record's header, labelled with its text in `lang`."""
+    """Every record's header, labeled with its text in `lang`."""
     base, offsets, records = _layout(fw)
     li = LANGS.index(lang)
     out = {}

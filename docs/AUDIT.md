@@ -55,7 +55,7 @@ particular:
   overlapping regions, `menus.hide` with two entries, `theme hue` with missing `--hue`)? Add tests
   where a bug is plausible; don't add tests that only restate the code.
 - Style: dead code (anything unused after the manifest refactor), docstrings that disagree with
-  behaviour, CLI help that is out of date, README commands that no longer run.
+  behavior, CLI help that is out of date, README commands that no longer run.
 
 ## 3. Process
 

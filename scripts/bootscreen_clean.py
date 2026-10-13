@@ -1,8 +1,8 @@
-"""Boot (044) and power-off (083) pictures that match a greyscale theme and the pixel fonts.
+"""Boot (044) and power-off (083) pictures that match a grayscale theme and the pixel fonts.
 
     uv run python -I scripts/bootscreen_clean.py extract/cab/Data/Device/RKNANOFW.IMG mods/bootscreen-clean/images [FONT12_SHEET.png]
 
-Sony's logo is kept (greyed); the text is re-set from the firmware's own glyphs: the tagline and
+Sony's logo is kept (grayed); the text is re-set from the firmware's own glyphs: the tagline and
 "See You Later" in font12 (after importing FONT12_SHEET if given, e.g. the Terminus sheet) and
 "POWER OFF" in Sony's font16.
 """
@@ -22,8 +22,8 @@ def line(font, text):
     return im.crop(im.getbbox())
 
 
-def put(canvas, glyphs, y, grey):
-    canvas.paste(Image.new("RGB", glyphs.size, (grey, grey, grey)), ((canvas.width - glyphs.width) // 2, y), glyphs)
+def put(canvas, glyphs, y, gray):
+    canvas.paste(Image.new("RGB", glyphs.size, (gray, gray, gray)), ((canvas.width - glyphs.width) // 2, y), glyphs)
 
 
 def main(img, outdir, sheet=None):

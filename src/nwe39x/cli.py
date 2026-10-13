@@ -15,7 +15,7 @@
   nwe39x menu hide NAME... -o FILE.tsv     patches that drop entries from the home menu
   nwe39x menu settings                     the Settings menu tree (from the string table)
   nwe39x menu settings-hide NAME... -o F   patches that drop submenus from Settings
-  nwe39x theme NAME DIR                    recolour every UI picture into DIR (presets: mono, ice, purple,
+  nwe39x theme NAME DIR                    recolor every UI picture into DIR (presets: mono, ice, purple,
                                            amber, ... ; or hue --hue DEG; --sheet PNG for a preview)
   nwe39x build --mod DIR                   patched updater in out/updater from DIR's mod.toml (includes,
                                            theme, images, fonts, strings, patches); version from the player
@@ -128,7 +128,7 @@ def cmd_theme(args):
     fn = themes.transform(args.theme, args.hue)
     skip = set() if args.artwork else themes.ARTWORK
     changed = themes.generate(fw, Path(args.dir), fn, skip, Path(args.sheet) if args.sheet else None)
-    print(f"wrote {len(changed)} recoloured pictures to {args.dir}; build with --images {args.dir}")
+    print(f"wrote {len(changed)} recolored pictures to {args.dir}; build with --images {args.dir}")
 
 
 def cmd_menu_show(args):
@@ -437,13 +437,13 @@ def main(argv: list[str] | None = None):
     image_args(p)
     p.set_defaults(func=cmd_menu_settings_hide)
 
-    p = sub.add_parser("theme", help="recolour the UI pictures into a folder for `build --images`")
-    p.add_argument("theme", choices=["hue", *themes.PRESETS], help="hue: rotate colours by --hue DEG; or a preset: "
+    p = sub.add_parser("theme", help="recolor the UI pictures into a folder for `build --images`")
+    p.add_argument("theme", choices=["hue", *themes.PRESETS], help="hue: rotate colors by --hue DEG; or a preset: "
                    + "; ".join(f"{k}: {v[0]}" for k, v in themes.PRESETS.items()))
     p.add_argument("dir")
     p.add_argument("--hue", type=float, help="degrees for the hue theme (gold is ~40; 200 ice blue, 290 purple)")
     p.add_argument("--sheet", help="also write a contact sheet PNG of the whole themed set")
-    p.add_argument("--artwork", action="store_true", help="also recolour the boot and power-off pictures")
+    p.add_argument("--artwork", action="store_true", help="also recolor the boot and power-off pictures")
     image_args(p)
     p.set_defaults(func=cmd_theme)
 
@@ -451,7 +451,7 @@ def main(argv: list[str] | None = None):
     p.add_argument("photo")
     p.add_argument("out")
     p.add_argument("--caption", default="", help='lines separated by "|"')
-    p.add_argument("--focus", default="0.5,0.5", help="centre of the crop as fractions, e.g. 0.55,0.45")
+    p.add_argument("--focus", default="0.5,0.5", help="center of the crop as fractions, e.g. 0.55,0.45")
     p.add_argument("--zoom", type=float, default=1.0)
     p.add_argument("--preview", help="also write a 3x enlarged preview PNG")
     p.set_defaults(func=cmd_bootscreen)

@@ -1,9 +1,9 @@
-"""Recolour the UI: the stock theme is black with gold accents (highlight bars, icons, the battery
-frame), blue rings for the boot animation and red rings for alerts. A theme is a per-pixel colour
+"""Recolor the UI: the stock theme is black with gold accents (highlight bars, icons, the battery
+frame), blue rings for the boot animation and red rings for alerts. A theme is a per-pixel color
 transform applied to every picture, written out as a folder of PNGs for `build --images`.
 
-    mono       accents become light grey (a plain white-on-black UI); reds stay red for alerts
-    hue DEG    rotate every colour by DEG degrees (gold is ~40: 200 gives ice blue, 290 purple)
+    mono       accents become light gray (a plain white-on-black UI); reds stay red for alerts
+    hue DEG    rotate every color by DEG degrees (gold is ~40: 200 gives ice blue, 290 purple)
 
 Pictures 044 (boot) and 083 (power off) are artwork and are left alone by default.
 """
@@ -51,7 +51,7 @@ def brighten(img: Image.Image, factor: float) -> Image.Image:
 
 
 def tint(img: Image.Image, hue_deg: float, sat: float = 0.6) -> Image.Image:
-    """Everything coloured becomes one hue (a phosphor look); greys stay grey."""
+    """Everything colored becomes one hue (a phosphor look); grays stay gray."""
     h, s, v = img.convert("HSV").split()
     h = h.point(lambda _: round(hue_deg * 255 / 360) % 256)
     s = s.point(lambda x: min(255, round(x * sat)))
@@ -60,7 +60,7 @@ def tint(img: Image.Image, hue_deg: float, sat: float = 0.6) -> Image.Image:
 
 def accent(img: Image.Image, hue_deg: float) -> Image.Image:
     """Move only the gold accent (hue 15-70 degrees) to another hue; the red alert rings and the
-    blue boot rings keep their colours."""
+    blue boot rings keep their colors."""
     h, s, v = img.convert("HSV").split()
     lo, hi = round(15 * 255 / 360), round(70 * 255 / 360)
     gold = h.point(lambda x: 255 if lo <= x <= hi else 0)
@@ -70,7 +70,7 @@ def accent(img: Image.Image, hue_deg: float) -> Image.Image:
 
 # Stock gold sits at about hue 40. Presets move it, or treat the whole palette.
 PRESETS = {
-    "mono": ("grey accents, reds kept for alerts", mono),
+    "mono": ("gray accents, reds kept for alerts", mono),
     "ice": ("gold accent -> ice blue", lambda im: accent(im, 195)),
     "sony-blue": ("gold accent -> the classic Walkman blue", lambda im: accent(im, 220)),
     "purple": ("gold accent -> violet", lambda im: accent(im, 275)),
@@ -78,7 +78,7 @@ PRESETS = {
     "rose": ("gold accent -> pink", lambda im: accent(im, 330)),
     "amber": ("everything amber, like an old phosphor display", lambda im: tint(im, 35)),
     "matrix": ("everything green phosphor", lambda im: tint(im, 115, 0.8)),
-    "neon": ("stock colours, saturated and brighter", lambda im: brighten(saturate(im, 1.6), 1.15)),
+    "neon": ("stock colors, saturated and brighter", lambda im: brighten(saturate(im, 1.6), 1.15)),
     "ghost": ("mono, dimmed: accents barely there", lambda im: brighten(mono(im), 0.65)),
 }
 
@@ -110,7 +110,7 @@ def generate(fw: Firmware, outdir: Path, fn, skip: set[int] = ARTWORK, sheet: Pa
 
 
 def apply(fw: Firmware, fn, skip: set[int] = ARTWORK) -> list[int]:
-    """Recolour the pictures in place (no folder). Returns the indices that changed."""
+    """Recolor the pictures in place (no folder). Returns the indices that changed."""
     changed = []
     for p in imageres.pictures(fw):
         if p.index in skip:

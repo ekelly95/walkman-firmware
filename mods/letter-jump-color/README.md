@@ -1,14 +1,14 @@
 # letter-jump-color
 
 The song list's letter jump (the `A`-`Z` / `0-9` / `etc.` index) draws its current letter in gold,
-RGB565 `0xf5e0`, with a colour set in code rather than a picture, so themes leave it gold. This
+RGB565 `0xf5e0`, with a color set in code rather than a picture, so themes leave it gold. This
 is one code patch: the `movw r0, #0xf5e0` at section 20 `0x306f234` (file offset `0x4be8e0` in
-stock 1.01), stored to the text colour right after. Background: NOTES.md, text colour.
+stock 1.01), stored to the text color right after. Background: NOTES.md, text color.
 
 `patches.tsv` sets matrix green. To match another preset, replace the new bytes with that
-preset's (the gold run through the preset's own recolour, then encoded as `movw r0, #imm`):
+preset's (the gold run through the preset's own recolor, then encoded as `movw r0, #imm`):
 
-| preset | colour | new bytes |
+| preset | color | new bytes |
 |---|---|---|
 | matrix | `0x47a6` | `44f2a670` |
 | ice | `0x05de` | `40f2de50` |
@@ -19,7 +19,7 @@ preset's (the gold run through the preset's own recolour, then encoded as `movw 
 | amber | `0xf5cc` | `4ff2cc50` |
 | mono | `0xf7be` | `4ff2be70` |
 | ghost | `0xa514` | `4af21450` |
-| neon | `0xfde0` | `4ff6e050` (still gold, as neon keeps stock colours) |
+| neon | `0xfde0` | `4ff6e050` (still gold, as neon keeps stock colors) |
 
 It is a code patch, so `flash` needs `--allow-code-patches`; themes stay picture-only. Stack it
 after a theme:

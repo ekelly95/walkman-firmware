@@ -1,11 +1,11 @@
 # nwe39x
 
-Custom colour themes, fonts, boot screens and menu tweaks for Sony's **NW-E393 / NW-E394 /
+Custom color themes, fonts, boot screens and menu tweaks for Sony's **NW-E393 / NW-E394 /
 NW-E395** Walkman, made by editing Sony's own firmware updater on your PC.
 
-![The ten colour presets applied to a sample of the player's UI pictures](docs/theme_presets.png)
+![The ten color presets applied to a sample of the player's UI pictures](docs/theme_presets.png)
 
-*The colour presets, applied to a sample of the player's interface pictures (`nwe39x theme NAME
+*The color presets, applied to a sample of the player's interface pictures (`nwe39x theme NAME
 DIR --sheet SHEET.png`). This is a contact sheet of the pictures, not a photo of the screen.*
 
 > [!WARNING]
@@ -29,7 +29,7 @@ inside it, and installs the result. The player still runs Sony's firmware, with 
 
 | | |
 |---|---|
-| **Colour themes** | ten presets, each with a `mods/theme-*` folder (mono's is `theme-dark`): mono, ice, sony-blue, purple, mint, rose, amber, matrix, neon, ghost; or any hue. Themes recolour pictures only: the highlighted letter in the song list's letter jump is drawn by code and stays Sony's gold unless you add `mods/letter-jump-color` (a code patch) |
+| **Color themes** | ten presets, each with a `mods/theme-*` folder (mono's is `theme-dark`): mono, ice, sony-blue, purple, mint, rose, amber, matrix, neon, ghost; or any hue. Themes recolor pictures only: the highlighted letter in the song list's letter jump is drawn by code and stays Sony's gold unless you add `mods/letter-jump-color` (a code patch) |
 | **Fonts** | replace the 12 px menu font or the 16 px font from a TrueType or BDF bitmap font |
 | **Boot and power-off screens** | from your own picture (128x160) |
 | **Text** | any interface string, in any of the 13 languages |
@@ -51,7 +51,7 @@ player's code**: a wrong one can stop it starting, so `flash` refuses them unles
 If you try it on an untested combination, please open an issue with the model, the Sony version
 (`nwe39x status`), and what happened.
 
-## First run: a colour theme
+## First run: a color theme
 
 You need Windows, [uv](https://docs.astral.sh/uv/) (it installs Python for you), and Sony's
 updater for the NW-E390 series, version 1.01: `NW-E390_V1_01.exe`. Find it on Sony's support site

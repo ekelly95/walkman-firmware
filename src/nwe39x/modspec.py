@@ -93,7 +93,7 @@ def apply(fw: Firmware, mod: Mod, log=print) -> int:
         n += apply(fw, inc, log)
     if mod.theme:
         changed = themes.apply(fw, themes.transform(mod.theme, mod.hue))
-        log(f"{mod.name}: theme {mod.theme}, {len(changed)} pictures recoloured")
+        log(f"{mod.name}: theme {mod.theme}, {len(changed)} pictures recolored")
         n += len(changed)
     for d in mod.images:
         pics = imageres.import_dir(fw, d)

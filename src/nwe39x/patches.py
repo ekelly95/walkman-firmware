@@ -77,7 +77,7 @@ def code_offset(fw: Firmware, section: int, addr: int, size: int = 1) -> int:
         raise FirmwareError(f"stage 3 has no section {section}") from None
     if s.code_pa <= addr and addr + size <= s.code_pa + s.code_sz:
         return stage.offset + (s.code_va - base) + (addr - s.code_pa)
-    if s.data_pa <= addr and addr + size <= s.data_pa + s.data_sz:  # initialised data works the same way
+    if s.data_pa <= addr and addr + size <= s.data_pa + s.data_sz:  # initialized data works the same way
         return stage.offset + (s.data_va - base) + (addr - s.data_pa)
     raise FirmwareError(f"{addr:#x}+{size} is outside section {section}'s code ({s.code_pa:#x}+{s.code_sz:#x}) "
                         f"and data ({s.data_pa:#x}+{s.data_sz:#x})")

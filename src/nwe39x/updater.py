@@ -46,7 +46,7 @@ def expand_cab(cab: Path, outdir: Path):
     else:
         raise FirmwareError("install cabextract to unpack the updater on this system")
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
-    # cabextract keeps Windows separators as literal backslashes on some versions; normalise.
+    # cabextract keeps Windows separators as literal backslashes on some versions; normalize.
     for path in list(outdir.iterdir()):
         if "\\" in path.name:
             target = outdir.joinpath(*path.name.split("\\"))
