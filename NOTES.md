@@ -207,8 +207,11 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
   --updater out/stock-restore` puts the player back. Rebuild with `nwe39x restore -o
   out/stock-restore --version N` when the version falls behind (cosmetic only: the installer
   ignores versions).
-- Not yet done: a refusal test (an image with a mismatched backup header, to see the installer
-  bail cleanly and delete the file). It needs a deliberately bad image sent to the player.
+- **Refusal test passed** (2026-10-12): stock image with one byte of the backup header changed
+  (CRC fixed, so only the installer's own check trips), copied and started with `nwe39x flash`'s
+  command. The player unmounted after 1 s, came back after 34 s (vs 15 s for a real install, so
+  it did reboot into the installer), still on 1.12 with the same DEVINFO, and the image file was
+  deleted. So the pre-write checks work from our flasher and a rejected image costs nothing.
 
 ## Picture drawing: not found yet (2026-10-12)
 
