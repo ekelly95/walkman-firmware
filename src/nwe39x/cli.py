@@ -116,7 +116,8 @@ def cmd_images_export(args):
 
 def cmd_bootscreen(args):
     focus = tuple(float(v) for v in args.focus.split(","))
-    img = bootscreen.make(Path(args.photo), args.caption.split("|") if args.caption else [], focus, args.zoom)
+    img = bootscreen.make(Path(args.photo), args.caption.split("|") if args.caption else [], focus, args.zoom,
+                          args.font, args.font_size)
     img.save(args.out)
     if args.preview:
         img.resize((bootscreen.W * 3, bootscreen.H * 3), resample=0).save(args.preview)
@@ -453,6 +454,8 @@ def main(argv: list[str] | None = None):
     p.add_argument("--caption", default="", help='lines separated by "|"')
     p.add_argument("--focus", default="0.5,0.5", help="center of the crop as fractions, e.g. 0.55,0.45")
     p.add_argument("--zoom", type=float, default=1.0)
+    p.add_argument("--font", help="TrueType font for the caption, e.g. TerminusTTF-Bold (default: a system sans)")
+    p.add_argument("--font-size", type=int, default=11, help="caption size in pixels (Terminus: 12, 14 or 16)")
     p.add_argument("--preview", help="also write a 3x enlarged preview PNG")
     p.set_defaults(func=cmd_bootscreen)
 
