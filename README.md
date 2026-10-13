@@ -50,8 +50,9 @@ player's code**: a wrong one can stop it starting, so `flash` refuses them unles
 | NW-E393, NW-E395 | 1.01 | **untested.** Sony uses the same updater for all three, so they probably behave the same |
 | any | other versions | **untested.** Not supported |
 
-If you try it on an untested combination, please open an issue with the model, the Sony version
-(`nwe39x status`), and what happened.
+If you try it on an untested combination, please file a
+[compatibility report](https://github.com/ekelly95/walkman-firmware/issues/new?template=compatibility-report.yml):
+model, Sony version (`nwe39x status`) and what happened. Leave out your serial number.
 
 ## First run: a color theme
 
