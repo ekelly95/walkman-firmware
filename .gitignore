@@ -21,3 +21,4 @@ __pycache__/
 .pytest_cache/
 # Personal photos stay out of git for now
 mods/*/images/
+mods/font-test/fonts/
