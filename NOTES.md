@@ -30,9 +30,10 @@ Source: Sony's `NW-E390_V1_01.exe` (7,669,504 bytes, sha256 `870121a0...c809a4`)
 
 | Blob | Format |
 |---|---|
-| font0, font1 | starts with a u16 identity table 0,1,2,... (glyph map?) - not decoded |
+| font0 | "font12": u16 code-point map, glyphs, widths, then the CJK part (see below) |
+| font1 | "font16": 33-byte records indexed directly by code point, no map (`fonts.py`) |
 | gbk0 | Chinese GBK font - not decoded |
-| strtbl0 | 13 languages, 1,388 UTF-16LE strings; `\` is a line break; German first |
+| strtbl0 | 13 languages of 181 records (2,353 slots, 1,766 distinct UTF-16LE strings); `\` is a line break; German first |
 | imageres0 | `ROCK26IMAGERES`, 234 images: 16-byte entries {u16 w,h,x,y; u32 size, offset}, RGB565 **big-endian** |
 
 Images include the boot screen ("For Music Lovers, By Music Lovers"), the "POWER OFF / See You
@@ -103,12 +104,15 @@ advance in a **separate 1-byte-per-glyph table after the bitmaps**, which the sh
 writes, so replacement glyphs are clipped to Sony's widths (the diag12 photo shows the solid `A`
 block cut to ~8 px, Sony's `A` width 7 plus spacing). The TrueType rendering itself is fine.
 
-Layout of font0 (blob at `0x559b9c`), corrected: a u16 table of **8,439** entries (U+0020-U+20F6,
-last real entry `table[8438] = 423`), then **424 glyphs** of 24 bytes starting at `0x55dd8a` (2 bytes
-earlier than fonts.py assumes, so every glyph is really one row lower: row 0 and row 11 blank), then
-**424 width bytes at `0x56054a`** (`width[glyph]`, 2-12; rightmost ink + 1 for 406 of 418 ASCII/Latin
-glyphs; space = 5), then the CJK structures from `0x5606f2`. Fix: on font12 import, write
-`width[glyph] = rightmost ink + 1`; read it back for `preview`/`width()`; shift the glyph base by -2.
+Layout of font0 (blob at `0x559b9c`): a u16 table of **8,439** entries (U+0020-U+20F6, last real
+entry `table[8438] = 423`), then **424 glyphs** of 24 bytes at `0x55dd8a` = blob + `0x41ee`, right
+after the table (the reader at section 0 `0x3053ef8` adds `movw r1, #0x41ee`; fonts.py once put the
+base 2 bytes later, which drew every glyph a row high, and has used `0x55dd8a` since). Rows 0 and 11
+are blank in most of Sony's glyphs (363 and 355 of 424), not all: `(`, `g`, `p` and others use
+them. Then **424 width bytes at `0x56054a`** (`width[glyph]`, 2-12; rightmost ink + 1 for every
+inked glyph except `1`, U+0031: width 6, ink ends at column 3; space = 5), then the CJK structures
+from `0x5606f2`. fonts.py writes `width[glyph] = rightmost ink + 1` on import and reads it back for
+`preview`/`width()`.
 
 ## font12 CJK part (2026-10-13; in fonts.py as `font12` / `font12zh`)
 
@@ -142,7 +146,9 @@ was checked against the bytes.
   0-30. `+0x4a` is a byte that gates the limit: `0` means limited. Nothing in stage 3 writes it
   with an immediate offset, so it probably arrives with the block from flash (a region or
   destination byte?). Section 13 at `0x306c6d2` also uses it (values 0/1 vs 3 vs other) to pick a
-  date layout, so it is not a plain on/off AVLS flag.
+  date layout, so it is not a plain on/off AVLS flag. `+0x355` is a u16, the selected home
+  entry: read and written with `ldrh.w`/`strh.w [rX, #0x355]` off the block in 11 sections,
+  including the home menu (section 17 `0x306c4aa`). `+0x353` (a byte) is the demo-mode flag.
 - **The cap is 17** (`0x11`), applied when `+0x4a == 0`:
   - boot, section 10 `0x306ea96`: if the byte is 0, call `0x3064b66` and clamp volume > 17 to 17;
   - section 0 `0x3064b66`: adds elapsed time to a u32 counter at `+0x57` (cumulative listening
@@ -207,7 +213,7 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
   key presses toggle it, if anyone wants to see what it does.
 - Other hidden strings: "Shutdown because power on with hold key!!!", "Long press back key: Back
   to home screen", "Long press power key: Shutdown", the "Os idle Wakeup by X key" set. Nothing
-  that names a test, factory, aging or service screen, in the code or in the 1,388 UI strings.
+  that names a test, factory, aging or service screen, in the code or in the UI strings.
 
 ## Brick insurance (2026-10-12)
 
