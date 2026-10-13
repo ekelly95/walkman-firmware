@@ -187,6 +187,40 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
   to home screen", "Long press power key: Shutdown", the "Os idle Wakeup by X key" set. Nothing
   that names a test, factory, aging or service screen, in the code or in the 1,388 UI strings.
 
+## Brick insurance (2026-10-12)
+
+- **What the installer checks** (section 9, `work/ghidra/out/install_routine.c`): magic, file size
+  = roundup(size + 16 KiB, 1 MiB) + 4, backup header equal to the main header. **Not the CRC.**
+  So a corrupted body with a good header is written as-is; the CRC only protects against our
+  own tooling mistakes (`Firmware.problems()` refuses to save or flash a bad one). Order of
+  writes: 8 KiB of 0xFF at the start, the body from 0x2000 on, then the first 8 KiB (header)
+  last, then `fw_write_image_maybe`. A power cut mid-install therefore leaves no valid header,
+  which is the case the boot loader should treat as "no firmware".
+- **Boot-ROM USB loader** (Rockbox `utils/rknanoutils/rkload/rkloader.c`, copy in
+  `reference/rockbox/`): the RKnano boot ROM enumerates as USB **071b:3226** and takes code by
+  vendor control transfer, bRequest 12, wValue 0, wIndex 1137, 4,096-byte chunks, payload
+  RC4-scrambled with the rkboottool key plus a 16-bit CRC. How this player enters that mode is
+  still unknown: nothing in stage 3 (the loader is in NAND and is not part of RKNANOFW.IMG). To
+  find out without risk: look for 071b:3226 in Device Manager while holding each key as USB is
+  plugged in. Until then, treat a failed install as unrecoverable.
+- **Stock restore kept ready**: `out/stock-restore` (stock 1.01 image as 1.13); `nwe39x flash
+  --updater out/stock-restore` puts the player back. Rebuild with `nwe39x restore -o
+  out/stock-restore --version N` when the version falls behind (cosmetic only: the installer
+  ignores versions).
+- Not yet done: a refusal test (an image with a mismatched backup header, to see the installer
+  bail cleanly and delete the file). It needs a deliberately bad image sent to the player.
+
+## Picture drawing: not found yet (2026-10-12)
+
+Tried: picture numbers as immediates and as byte/u16/u32 tables, picture data and entry offsets,
+the small-ID functions at `0x3066950`/`0x306696c`/`0x3066992`/`0x30669b0` (those are an event
+bitset: set, test-and-clear, clear, test), and the resource reader `0x3066c34(type, offset, size,
+buf)` (the 16-byte reads near it in sections 24 and 31 are library-database sectors at logical
+address `0x10000000 + sector*512`). Next approach: start from the LCD side. `AnnotateRknano.java`
+already names `lcd_fill_rect_maybe` and `lcd_flush_maybe`; the blit that copies RGB565 rows into
+the frame buffer is the one routine every picture goes through, and its callers lead back to the
+picture loader and the layout tables.
+
 ## Not known yet
 - Brick recovery: Rockbox `utils/rknanoutils/rkload` loads code over USB in the RKnano boot-ROM
   mode. How to enter that mode on this player is unknown (possibly a test point inside).
