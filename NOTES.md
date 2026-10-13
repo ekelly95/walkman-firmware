@@ -160,6 +160,33 @@ out/x` copies, sends, and waits. The player itself never checks the version, so 
 no need to count upwards any more (the builds still do, so Unit Information tells them apart).
 Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, `FC 04` reboots.
 
+## Hidden modes (2026-10-12: looked for a factory test mode; found a demo mode instead)
+
+- **The test patterns (pictures 087-091: colour bars with crosshair, blue/green/red/grey ramps)
+  are not referenced anywhere in stage 3**: not by index (as an immediate, a byte/u16/u32 table or
+  a window of values), not by their entry or data offsets. The only matches for 87..91 are a
+  coefficient table in section 122. Pictures the UI does use (044 boot, 083 power off) are not
+  referenced by number either, so the UI reaches pictures through something indirect; but the
+  five patterns never appear together in any table. Most likely they are leftovers of Rockchip's
+  reference design, or driven by a factory tool over USB with code that is not in this image.
+- **The vendor SCSI handler is not in stage 3 either**: no `dbmn`, no `0xFC` dispatch (the one
+  `cmp #0xfc` ladder in section 31 is a UTF-8 lead-byte decoder). USB mass storage and the
+  `FC 04` install trigger therefore live in the boot loader / NAND loader outside this image,
+  which is also why the trigger works whatever firmware is installed.
+- **Demo mode** (strings "Enter Demo mode" / "Exit Demo mode", section 0 at `0x30603f4`): a
+  store-demo mode, not a test mode. Toggled by a secret sequence of **15 key events**: for key
+  events with `[event+0x10] == 2`, a counter at `[event+3]` advances while each key `[event+8]`
+  equals `table[counter]` and resets otherwise (`0x3060434`: `ldr r2, =0x100; ldr.w r2, [r2, r0,
+  lsl #2]; cmp r2, r1`); at 15 (`cmp r0, #0xf` at `0x3060402`) the flag at settings `+0x353`
+  flips. The table is in SRAM at `0x100`, which no section's data or bss covers, so its contents
+  come from outside the image (boot loader parameters?). Entering (`0x30647ca`) sets volume 13,
+  settings `+0x4f = 4`, `+0xa2/+0x9d/+0x9a = 1`, `+0xa7 = 6`, `+0x9c = 0`, then re-initialises
+  playback; exiting restores. A patch that NOPs the `bne` at `0x3060444` would make any 15
+  key presses toggle it, if anyone wants to see what it does.
+- Other hidden strings: "Shutdown because power on with hold key!!!", "Long press back key: Back
+  to home screen", "Long press power key: Shutdown", the "Os idle Wakeup by X key" set. Nothing
+  that names a test, factory, aging or service screen, in the code or in the 1,388 UI strings.
+
 ## Not known yet
 - Brick recovery: Rockbox `utils/rknanoutils/rkload` loads code over USB in the RKnano boot-ROM
   mode. How to enter that mode on this player is unknown (possibly a test point inside).
