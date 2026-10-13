@@ -1,0 +1,28 @@
+# The offline test suite on every push. Tests that need Sony's firmware image skip here: the
+# repository ships no Sony files, so CI runs on the synthetic images in tests/conftest.py.
+# Windows is where the tool flashes players; Linux checks that building and previewing stay
+# portable.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # setup-uv publishes no moving major tag, so this names an exact release.
+      - uses: astral-sh/setup-uv@v10.2.0
+
+      - run: uv sync --locked
+
+      - run: uv run pytest -q

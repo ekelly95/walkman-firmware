@@ -1,5 +1,7 @@
 # nwe39x
 
+[![tests](https://github.com/ekelly95/walkman-firmware/actions/workflows/tests.yml/badge.svg)](https://github.com/ekelly95/walkman-firmware/actions/workflows/tests.yml)
+
 Custom color themes, fonts, boot screens and menu tweaks for Sony's **NW-E393 / NW-E394 /
 NW-E395** Walkman, made by editing Sony's own firmware updater on your PC.
 
