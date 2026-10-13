@@ -12,9 +12,11 @@ Python 3.12, `uv`, package `nwe39x` in `src/`, CLI `uv run nwe39x ...`. Tests:
 `uv run pytest -q` (80 pass). **NOTES.md is the knowledge base**:
 every reverse-engineering fact, with addresses, lives there; read it first and keep it current.
 
-The player (one unit, serial in `nwe39x devinfo`) is on **1.22 = `mods/my-walkman`**: matrix
-theme (everything green, alert rings included), Terminus 12 in the menu font, matching
-boot/power-off screens, volume cap off, FM Radio dropped from the home menu and from Settings. Sony's stock image is 1.01; our versions only count upward so Unit
+The player (one unit, serial in `nwe39x devinfo`) is on **1.24 = `mods/my-walkman`**: matrix
+theme (everything green, alert rings included) with the letter-jump letter green too
+(`letter-jump-color`), Terminus 12 in the menu font, matching boot/power-off screens, volume
+cap off. FM Radio is back in both menus (the user uses it; `no-fm`/`no-fm-settings` stay as
+opt-in examples). Sony's stock image is 1.01; our versions only count upward so Unit
 Information tells builds apart (the installer itself never checks versions).
 
 ## Daily commands

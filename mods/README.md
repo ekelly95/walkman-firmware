@@ -4,7 +4,7 @@ A mod is a folder. `mod.toml` says what it holds and what it builds on (see `src
 
 ```toml
 name = "my-walkman"
-include = ["../theme-matrix", "../letter-jump-color", "../bootscreen-clean", "../font-terminus", "../volume-limit", "../no-fm", "../no-fm-settings"]
+include = ["../theme-matrix", "../letter-jump-color", "../bootscreen-clean", "../font-terminus", "../volume-limit"]
 ```
 
 Pieces a mod can have: `theme` (a preset, applied to Sony's pictures at build time), `images`
@@ -23,7 +23,7 @@ no-fm patches, the clean boot screens) are not committed; each mod's README says
 
 | mod | what |
 |---|---|
-| my-walkman | the build on the player: all of the below |
+| my-walkman | the build on the player: theme-matrix, letter-jump-color, bootscreen-clean, font-terminus, volume-limit |
 | theme-dark, theme-ice, ... | recolour presets (`nwe39x theme`); pictures only, so the letter-jump highlight stays gold |
 | letter-jump-color | the letter-jump highlight in a theme colour (one code patch; matrix by default) |
 | bootscreen-clean | grey logo, taglines in the UI fonts |
