@@ -1,0 +1,17 @@
+# home menu without FM (nwe39x menu hide)
+# section	run address	old	new	note
+17	302302c	00003b000a00010039000b00020037000c0003003f006e0004003d000e00050035000f00	00003b000a00010039000b0003003f006e0004003d000e00050035000f00050035000f00	home menu: Photos, Music, Settings, Playlists, Go to song playback\screen
+17	306c882	801d	401d	home menu count 6->5 (adds)
+17	306c896	0528	0428	home menu count 6->5 (cmp0)
+17	306c8a4	0528	0428	home menu count 6->5 (cmp0)
+17	306c8a8	801f	401f	home menu count 6->5 (subs)
+17	306c8bc	0520	0420	home menu count 6->5 (mov0)
+17	306c8c4	0528	0428	home menu count 6->5 (cmp0)
+17	306c8ce	0528	0428	home menu count 6->5 (cmp0)
+17	306c922	062c	052c	home menu count 6->5 (cmp4)
+file	b76c22	06004e00	56002100	icon 63 (Settings) to slot 2
+file	b76c32	06004e00	56002100	icon 64 (Settings) to slot 2
+file	b76c02	2e004e00	06004e00	icon 61 (Playlists) to slot 3
+file	b76c12	2e004e00	06004e00	icon 62 (Playlists) to slot 3
+file	b76b82	56004e00	2e004e00	icon 53 (Go to song playback\screen) to slot 4
+file	b76b92	56004e00	2e004e00	icon 54 (Go to song playback\screen) to slot 4

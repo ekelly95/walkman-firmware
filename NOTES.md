@@ -243,6 +243,14 @@ Pictures are drawn by index after all, through two section 0 routines (names now
   arrows at y=134; album-art frame 139 with the Walkman logo 185 or 229 (refresh) in a grid.
   Charging: battery 96 at (29,39), 97/98 at (8|64,110). EQ screen (section 34): 102, 104, 101.
 - The test patterns 087-091 are still never drawn, which confirms they are unused.
+- **Home menu** (section 17, `work/ghidra/out/home.c`): a 3x2 icon grid over the table at section 17
+  data `0x302302c`, six entries of `{u16 id, u16 icon, u16 string}`: (0, 59, Photos), (1, 57,
+  Music), (2, 55, FM Radio), (3, 63, Settings), (4, 61, Playlists), (5, 53, "Go to song playback
+  screen"). Icons are drawn by `0x3062250` (index -> stored x,y) in a loop to 6, the selected one as
+  icon+1; each icon pair carries its grid slot in its picture entry ((6|46|86, 33|78)). `id` is what
+  selection dispatches on (settings `+0x355`). The count 6 lives in eight Thumb-1 immediates
+  (`0x306c882` .. `0x306c922`). `nwe39x menu hide FM` rewrites the table, those constants and the
+  kept icons' slots; verified on the player as 1.13.
 
 ## Not known yet
 - Brick recovery: Rockbox `utils/rknanoutils/rkload` loads code over USB in the RKnano boot-ROM

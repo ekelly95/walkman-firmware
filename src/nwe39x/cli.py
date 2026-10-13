@@ -10,6 +10,8 @@
   nwe39x fonts export SHEET.png            glyph sheet (--font 16|12, --range ascii|cyrillic|...)
   nwe39x fonts preview "text" OUT.png      render text with the firmware's own glyphs
   nwe39x bootscreen PHOTO OUT.png          make a 128x160 boot picture from a photo
+  nwe39x menu show                         the home menu's entries (id, icon, label)
+  nwe39x menu hide NAME... -o FILE.tsv     patches that drop entries from the home menu
   nwe39x theme NAME DIR                    recolour every UI picture into DIR (presets: mono, ice, purple,
                                            amber, ... ; or hue --hue DEG; --sheet PNG for a preview)
   nwe39x build --mod DIR                   patched updater in out/updater from DIR/images/*.png,
@@ -26,7 +28,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import bootscreen, device, flash, fonts, imageres, patches, strtbl, themes, updater
+from . import bootscreen, device, flash, fonts, imageres, menus, patches, strtbl, themes, updater
 from .rknanofw import Firmware, FirmwareError, stage_sections
 
 DEFAULT_EXTRACT = Path("extract")
@@ -82,8 +84,8 @@ def cmd_diff(args):
     if len(fw.buf) != len(stock.buf):
         raise FirmwareError("images differ in size")
     regions = [(p.offset, p.offset + p.size, f"picture {p.index:03d}") for p in imageres.pictures(stock)]
-    if args.patches:
-        regions += patches.regions(stock, patches.parse_tsv(Path(args.patches)))
+    for f in args.patches or []:
+        regions += patches.regions(stock, patches.parse_tsv(Path(f)))
     regions += [(t.offset, t.offset + strtbl.SLOT, f"string {t.lang}:{t.record} ({t.text!r})") for t in strtbl.texts(stock)]
     m = updater.VERSION_RE.search(bytes(stock.buf))
     regions += [(m.start(1), m.end(1), "firmware version (XML)"), (4, 8, "header version"),
@@ -158,6 +160,21 @@ def cmd_theme(args):
     print(f"wrote {len(changed)} recoloured pictures to {args.dir}; build with --images {args.dir}")
 
 
+def cmd_menu_show(args):
+    fw = Firmware.load(stock_image(args))
+    for i, e in enumerate(menus.home_menu(fw)):
+        print(f"  {i}: id {e.id}  icon {e.icon:3d}  string {e.string:3d}  {e.label}")
+
+
+def cmd_menu_hide(args):
+    fw = Firmware.load(stock_image(args))
+    plist = menus.hide(fw, args.names)
+    if not plist:
+        raise FirmwareError("nothing to hide")
+    menus.write_tsv(Path(args.out), plist, "home menu without " + ", ".join(args.names) + " (nwe39x menu hide)")
+    print(f"wrote {len(plist)} patches to {args.out}: {plist[0].note}")
+
+
 def cmd_strings_export(args):
     fw = Firmware.load(stock_image(args))
     strtbl.export(fw, Path(args.file), args.lang)
@@ -185,18 +202,19 @@ def cmd_fonts_preview(args):
 
 def cmd_build(args):
     fw = Firmware.load(stock_image(args))
-    images, strings, font_dir, patch_file = list(args.images or []), args.strings, args.fonts, args.patches
+    images, strings, font_dir, patch_files = list(args.images or []), args.strings, args.fonts, list(args.patches or [])
     if args.mod:
         mod = Path(args.mod)
         if (mod / "images").is_dir():
             images.insert(0, mod / "images")
+        if (mod / "patches.tsv").is_file():
+            patch_files.insert(0, mod / "patches.tsv")
         strings = strings or (mod / "strings.tsv" if (mod / "strings.tsv").is_file() else None)
         font_dir = font_dir or (mod / "fonts" if (mod / "fonts").is_dir() else None)
-        patch_file = patch_file or (mod / "patches.tsv" if (mod / "patches.tsv").is_file() else None)
     pics = [i for d in images for i in imageres.import_dir(fw, Path(d))]
     texts = strtbl.import_tsv(fw, Path(strings)) if strings else []
     glyphs = [cp for sheet in sorted(Path(font_dir).glob("*.png")) for cp in fonts.import_sheet(fw, sheet)] if font_dir else []
-    code = patches.apply(fw, patches.parse_tsv(Path(patch_file))) if patch_file else []
+    code = [p for f in patch_files for p in patches.apply(fw, patches.parse_tsv(Path(f)))]
     if not pics and not texts and not glyphs and not code:
         raise FirmwareError("nothing to change; give --mod, --images, --strings, --fonts or --patches (or use `restore`)")
     if pics:
@@ -298,7 +316,7 @@ def main(argv: list[str] | None = None):
     p = sub.add_parser("diff", help="list what a built image changes compared with Sony's")
     p.add_argument("target", help="built RKNANOFW.IMG, e.g. out/updater/Data/Device/RKNANOFW.IMG")
     p.add_argument("--cab", type=Path, default=DEFAULT_EXTRACT / "cab", help="unpacked updater folder")
-    p.add_argument("--patches", help="patches.tsv the build used, so its bytes are named rather than UNEXPECTED")
+    p.add_argument("--patches", action="append", help="patches.tsv the build used (repeatable), so its bytes are named rather than UNEXPECTED")
     p.set_defaults(func=cmd_diff)
 
     p = sub.add_parser("blobs", help="write every resource (stage3 = the OS, fonts, strings, images) to DIR")
@@ -342,6 +360,16 @@ def main(argv: list[str] | None = None):
     image_args(p)
     p.set_defaults(func=cmd_fonts_preview)
 
+    menu = sub.add_parser("menu", help="the home menu").add_subparsers(dest="menu_cmd", required=True)
+    p = menu.add_parser("show", help="list the home menu's entries")
+    image_args(p)
+    p.set_defaults(func=cmd_menu_show)
+    p = menu.add_parser("hide", help="write patches that drop entries from the home menu")
+    p.add_argument("names", nargs="+", help="labels to drop, e.g. FM Photos")
+    p.add_argument("-o", "--out", required=True, help="patches.tsv to write (use it with build --patches)")
+    image_args(p)
+    p.set_defaults(func=cmd_menu_hide)
+
     p = sub.add_parser("theme", help="recolour the UI pictures into a folder for `build --images`")
     p.add_argument("theme", choices=["hue", *themes.PRESETS], help="hue: rotate colours by --hue DEG; or a preset: "
                    + "; ".join(f"{k}: {v[0]}" for k, v in themes.PRESETS.items()))
@@ -370,7 +398,7 @@ def main(argv: list[str] | None = None):
             p.add_argument("--images", action="append", help="folder of NNN.png / NNN_*.png pictures to swap in (repeatable; later folders win)")
             p.add_argument("--strings", help="TSV of lang<TAB>record<TAB>text lines")
             p.add_argument("--fonts", help="folder of glyph sheets from `nwe39x fonts export`")
-            p.add_argument("--patches", help="patches.tsv of code changes (section, run address, old, new)")
+            p.add_argument("--patches", action="append", help="patches.tsv of code changes (repeatable)")
         p.add_argument("--version", help="version to install as, e.g. 1.03 (default: one above the player's)")
         p.add_argument("-o", "--out", type=Path, default=DEFAULT_OUT)
         p.set_defaults(func=func)
