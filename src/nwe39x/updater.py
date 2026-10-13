@@ -75,9 +75,13 @@ def firmware_version(fw: Firmware) -> str:
 
 
 def set_firmware_version(fw: Firmware, version: str):
+    """Set both places the version lives: the capability XML (reported to the PC) and the BCD
+    version in the header and its backup (shown on the player's Unit Information screen)."""
     check_version(version)
     m = VERSION_RE.search(bytes(fw.buf))
     fw.write(m.start(1), version.encode())
+    major, minor = version.split(".")
+    fw.set_header_version(int(major), int(minor))
 
 
 def check_version(version: str):

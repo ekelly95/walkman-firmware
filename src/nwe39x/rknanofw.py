@@ -101,6 +101,19 @@ class Firmware:
     def size_field(self) -> int:
         return struct.unpack_from("<I", self.buf, SIZE_FIELD)[0]
 
+    @property
+    def header_version(self) -> tuple[int, int, int]:
+        """(major, minor, rev) from the BCD u16s at 0x4. The player's Unit Information screen
+        shows major.minor (1.01 for Sony's image, rev 10)."""
+        return tuple(int(f"{v:x}") for v in struct.unpack_from("<3H", self.buf, 4))
+
+    def set_header_version(self, major: int, minor: int):
+        """Write major.minor into the header and its backup copy (the player requires them equal)."""
+        if not (0 <= major <= 9999 and 0 <= minor <= 9999):
+            raise FirmwareError("version parts must be 0-9999")
+        for base in (0, self.size_field):
+            struct.pack_into("<2H", self.buf, base + 4, int(str(major), 16), int(str(minor), 16))
+
     # Blobs ---------------------------------------------------------------------------------
     def blob(self, table: str, index: int = 0) -> Blob:
         try:

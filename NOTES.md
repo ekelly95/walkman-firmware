@@ -72,7 +72,7 @@ compares versions (`VERSION_EQUAL`, `VERSION_OLDER`, `VERSION_NEWER`, `VERSION_C
   For the next mod, use `--version 1.03` (the tool needs a newer version each time).
 - Backup of the player's files from before the flash: `backup/`.
 
-## Sony's tool reports false failures (2026-10-12)
+## Sony's tool and its false failures (2026-10-12, solved)
 
 - Stock image re-versioned as 1.03 (`nwe39x restore --version 1.03`): the tool said "software
   update has been failed ... unknown error. Error Code:" (blank), yet a 1 s poll of the drive showed
@@ -88,6 +88,10 @@ compares versions (`VERSION_EQUAL`, `VERSION_OLDER`, `VERSION_NEWER`, `VERSION_C
   (probably it needs exclusive access to send its SCSI command); (2) the closing "failed" message
   is the tool's own post-install check and appears even on clean successful installs.
 - M2 checkpoint passed: mod 1.02 -> stock 1.03 -> mod 1.04.
+- Cause of the false "failed": the image has a second version, BCD major/minor/rev u16s at header
+  0x4 (and in the backup header), which the Unit Information screen shows (it said 1.01 on the
+  1.04 build). Setting it as well (1.05 build): Sony's tool reported **success**, the player reports
+  1.05. So the tool's post-install check compares the package version with the header version.
 - Windows sees the player only as USB mass storage (`SONY WALKMAN 1.00` SCSI inquiry, never
   changes), so the tool's post-install version check must use the capability XML or a vendor
   SCSI command. Find out in M5 (`WmFwUpdater.dll`, USB capture).

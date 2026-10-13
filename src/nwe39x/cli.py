@@ -52,7 +52,9 @@ def cmd_unpack(args):
 
 def cmd_info(args):
     fw = Firmware.load(stock_image(args))
-    print(f"date {fw.date}  vendor {fw.vendor!r}  model {fw.model!r}  version {updater.firmware_version(fw)}")
+    major, minor, rev = fw.header_version
+    print(f"date {fw.date}  vendor {fw.vendor!r}  model {fw.model!r}")
+    print(f"version: XML {updater.firmware_version(fw)}, header {major}.{minor:02d} (rev {rev})")
     print(f"payload {fw.size_field:#x} bytes, file {len(fw.buf):#x}, CRC {fw.stored_crc:#010x}")
     for name, blobs in fw.blobs.items():
         for b in blobs:
@@ -74,7 +76,9 @@ def cmd_diff(args):
     regions = [(p.offset, p.offset + p.size, f"picture {p.index:03d}") for p in imageres.pictures(stock)]
     regions += [(t.offset, t.offset + strtbl.SLOT, f"string {t.lang}:{t.record} ({t.text!r})") for t in strtbl.texts(stock)]
     m = updater.VERSION_RE.search(bytes(stock.buf))
-    regions += [(m.start(1), m.end(1), "firmware version"), (len(stock.buf) - 4, len(stock.buf), "CRC")]
+    regions += [(m.start(1), m.end(1), "firmware version (XML)"), (4, 8, "header version"),
+                (stock.size_field + 4, stock.size_field + 8, "backup header version"),
+                (len(stock.buf) - 4, len(stock.buf), "CRC")]
     hits, unknown = {}, []
     for i in (i for i in range(len(stock.buf)) if fw.buf[i] != stock.buf[i]):
         name = next((n for s, e, n in regions if s <= i < e), None)
@@ -137,8 +141,8 @@ def cmd_restore(args):
 FLASH_TIPS = """\
 Before running it: close File Explorer windows and apps showing the player, and leave the drive
 alone until the tool's window closes (other programs reading the drive make it fail before copying).
-Sony's tool may end with "The software update has been failed ... unknown error" even when the
-install worked. Run `nwe39x status` afterwards: the player reports the new version if it installed."""
+If Sony's tool says "failed ... unknown error", check `nwe39x status` before retrying: the player
+reports the new version if the install worked."""
 
 
 def _write(args, fw: Firmware):

@@ -79,6 +79,10 @@ def test_version_bump(image_bytes):
     assert updater.firmware_version(fw) == "1.01"
     updater.set_firmware_version(fw, "1.07")
     assert updater.firmware_version(fw) == "1.07"
+    assert fw.header_version[:2] == (1, 7)
+    assert fw.buf[4:8] == b"\x01\x00\x07\x00"
+    fw.fix_crc()
+    assert fw.problems() == []  # backup header updated too
     assert updater.next_version("1.09") == "1.10" and updater.next_version("1.99") == "2.00"
     with pytest.raises(FirmwareError):
         updater.set_firmware_version(fw, "1.100")
@@ -111,6 +115,7 @@ def test_stock_image_checks(stock_bytes):
     assert fw.problems() == []
     assert fw.stored_crc == 0xE3AE9225 == rk_crc(stock_bytes[:-4])
     assert updater.firmware_version(fw) == "1.01"
+    assert fw.header_version == (1, 1, 10)
     assert len(imageres.pictures(fw)) == 234
 
 
