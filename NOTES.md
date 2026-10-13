@@ -251,8 +251,11 @@ Pictures are drawn by index after all, through two section 0 routines (names now
   data `0x302302c`, six entries of `{u16 id, u16 icon, u16 string}`: (0, 59, Photos), (1, 57,
   Music), (2, 55, FM Radio), (3, 63, Settings), (4, 61, Playlists), (5, 53, "Go to song playback
   screen"). Icons are drawn by `0x3062250` (index -> stored x,y) in a loop to 6, the selected one as
-  icon+1; each icon pair carries its grid slot in its picture entry ((6|46|86, 33|78)). `id` is what
-  selection dispatches on (settings `+0x355`). The count 6 lives in eight Thumb-1 immediates
+  icon+1; each icon pair carries its grid slot in its picture entry ((6|46|86, 33|78)). OK dispatches on the
+  cursor *slot*, not the id: `ldrsb r1, [0x3023050]` then `tbb [pc, r1]` at `0x306c594` over a
+  6-byte table at `0x306c598`, with handlers in id order (slot 3 `0x306c600` sends message 9 with
+  record 110, the Settings tree). `menu hide` reorders that table too; before 1.19 it did not, so
+  Settings in slot 2 opened FM Radio. The count 6 lives in eight Thumb-1 immediates
   (`0x306c882` .. `0x306c922`). `nwe39x menu hide FM` rewrites the table, those constants and the
   kept icons' slots; verified on the player as 1.13.
 

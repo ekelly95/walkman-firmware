@@ -1,6 +1,7 @@
 # home menu without FM (nwe39x menu hide)
 # section	run address	old	new	note
 17	302302c	00003b000a00010039000b00020037000c0003003f006e0004003d000e00050035000f00	00003b000a00010039000b0003003f006e0004003d000e00050035000f00050035000f00	home menu: Photos, Music, Settings, Playlists, Go to song playback\screen
+17	306c598	031420343f57	0314343f5757	home menu: OK dispatch follows the kept entries
 17	306c882	801d	401d	home menu count 6->5 (adds)
 17	306c896	0528	0428	home menu count 6->5 (cmp0)
 17	306c8a4	0528	0428	home menu count 6->5 (cmp0)

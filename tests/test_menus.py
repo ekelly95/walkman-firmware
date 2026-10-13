@@ -32,7 +32,7 @@ def test_stock_home_menu(stock_bytes):
     assert [e.id for e in entries] == list(range(6))
     plist = menus.hide(fw, ["FM"])
     assert plist[0].section == 17 and len(plist[0].old) == 36
-    assert len([p for p in plist if p.section == 17]) == 9  # table + 8 count sites
+    assert len([p for p in plist if p.section == 17]) == 10  # table + dispatch + 8 count sites
     assert len([p for p in plist if p.section == patches.FILE]) == 6  # 3 kept entries x icon pair
     patches.apply(fw, plist)
     assert [e.label for e in menus.home_menu(fw)][:5] == ["Photos", "Music", "Settings", "Playlists", "Go to song playback\screen"]

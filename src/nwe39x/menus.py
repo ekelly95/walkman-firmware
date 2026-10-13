@@ -1,9 +1,9 @@
 """The home menu, as a table in stage 3 you can rewrite.
 
 The home screen (section 17) is a carousel over a table at its data address 0x302302c: six
-entries of {u16 id, u16 icon, u16 string}. `id` is what the firmware dispatches on when an entry
-is chosen, `icon` is the picture drawn (icon + 1 is its highlighted twin), `string` is the label.
-The entry count 6 is hard-coded in the cursor wrap-around and the draw loop (eight 16-bit
+entries of {u16 id, u16 icon, u16 string}. `id` names the entry, `icon` is the picture drawn
+(icon + 1 is its highlighted twin), `string` is the label. OK dispatches on the cursor slot
+through a jump table in id order, so hiding an entry reorders that table too. The entry count 6 is hard-coded in the cursor wrap-around and the draw loop (eight 16-bit
 instructions), so hiding an entry rewrites the table and patches those constants to the new
 count. Everything is expressed as patches.tsv lines for `build --patches`.
 """
@@ -31,6 +31,14 @@ COUNT_SITES = [
     (0x306C882, "adds", 0), (0x306C896, "cmp0", -1), (0x306C8A4, "cmp0", -1), (0x306C8A8, "subs", 0),
     (0x306C8BC, "mov0", -1), (0x306C8C4, "cmp0", -1), (0x306C8CE, "cmp0", -1), (0x306C922, "cmp4", 0),
 ]
+# OK on the home screen dispatches on the cursor slot, not the entry id: `tbb [pc, slot]` at
+# 0x306C594 over this 6-byte table of handlers in id order (0x306C600, slot 3, opens Settings).
+DISPATCH = 0x306C598
+
+
+def _read(fw: Firmware, section: int, addr: int, size: int) -> bytes:
+    off = patches.code_offset(fw, section, addr, size)
+    return bytes(fw.buf[off:off + size])
 
 
 def _encode(kind: str, value: int) -> bytes:
@@ -78,6 +86,9 @@ def hide(fw: Firmware, names: list[str]) -> list[patches.Patch]:
     old_table = b"".join(e.pack() for e in entries)
     out = [patches.Patch(SECTION, TABLE, old_table, new_table,
                          "home menu: " + ", ".join(e.label for e in keep))]
+    old_jumps = _read(fw, SECTION, DISPATCH, COUNT)
+    new_jumps = bytes(old_jumps[e.id] for e in keep) + bytes([old_jumps[keep[-1].id]]) * (COUNT - n)
+    out.append(patches.Patch(SECTION, DISPATCH, old_jumps, new_jumps, "home menu: OK dispatch follows the kept entries"))
     for addr, kind, delta in COUNT_SITES:
         out.append(patches.Patch(SECTION, addr, _encode(kind, COUNT + delta), _encode(kind, n + delta),
                                  f"home menu count {COUNT}->{n} ({kind})"))
