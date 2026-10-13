@@ -314,6 +314,8 @@ def sheet_from_bdf(font: Font, bdf_path: Path, cps: list[int], path: Path, cols:
     """Copy a BDF bitmap font's glyphs into a glyph sheet, pixel for pixel, on `base` (default: the
     BDF's ascent when ascent + descent fit the cell, else the firmware font's baseline). Widths:
     the BDF's DWIDTH per glyph (default), "ink" for rightmost ink + 1, or a number for all.
+    With "ink" the glyphs move one column right: the firmware's convention (Sony's glyphs and
+    from-ttf) is a blank column on the left, while BDF fonts keep their spacing on the right.
     Returns (glyph count, code points whose pixels did not fit the cell)."""
     bdf = parse_bdf(Path(bdf_path).read_text(encoding="latin-1"))
     if base is None:
@@ -322,6 +324,7 @@ def sheet_from_bdf(font: Font, bdf_path: Path, cps: list[int], path: Path, cols:
         raise FirmwareError(f"advance {advance} is outside 1-{font.size} for {font.name}")
     if advance not in (None, "ink") and not isinstance(advance, int):
         raise FirmwareError(f"advance must be a number or 'ink', not {advance!r}")
+    left = 1 if advance == "ink" else 0
     glyphs, widths, clipped = {}, {}, []
     for cp in cps:
         g = bdf.glyphs.get(cp)
@@ -334,7 +337,7 @@ def sheet_from_bdf(font: Font, bdf_path: Path, cps: list[int], path: Path, cols:
         for r, bits in enumerate(g.rows[:h]):
             for c in range(w):
                 if bits >> (g.bits - 1 - c) & 1:
-                    x, y = xo + c, top + r
+                    x, y = left + xo + c, top + r
                     if 0 <= x < font.size and 0 <= y < font.size:
                         img.putpixel((x, y), INK)
                     else:

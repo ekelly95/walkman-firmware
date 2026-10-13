@@ -176,8 +176,8 @@ def test_parse_bdf():
         fonts.parse_bdf(BDF.replace('"ISO10646"', '"KOI8"').replace('"1"', '"R"'))
 
 
-@pytest.mark.parametrize("advance, want", [(None, 5), ("ink", 4), (6, 6)])
-def test_sheet_from_bdf(image_bytes, tmp_path, advance, want):
+@pytest.mark.parametrize("advance, left, want", [(None, 0, 5), ("ink", 1, 5), (6, 0, 6)])
+def test_sheet_from_bdf(image_bytes, tmp_path, advance, left, want):
     fw = Firmware.from_bytes(image_bytes)
     f = fonts.Font.font12(fw)
     (tmp_path / "t.bdf").write_text(BDF)
@@ -185,12 +185,12 @@ def test_sheet_from_bdf(image_bytes, tmp_path, advance, want):
     assert n == 2 and clipped == []  # U+2603 is in neither font
     fonts.import_sheet(fw, tmp_path / "t.png")
     img = f.image(65)
-    # baseline = ascent 6: the 3-row A sits on rows 3-5, x offset 1
-    assert [img.getpixel((x, 3)) for x in range(4)] == [0, 0, 255, 0]
-    assert [img.getpixel((x, 5)) for x in range(5)] == [0, 255, 255, 255, 0]
+    # baseline = ascent 6: the 3-row A sits on rows 3-5, x offset 1 (+1 more in ink mode)
+    assert [img.getpixel((x + left, 3)) for x in range(4)] == [0, 0, 255, 0]
+    assert [img.getpixel((x + left, 5)) for x in range(5)] == [0, 255, 255, 255, 0]
     assert f.width(65) == want
     g = f.image(103)
-    assert g.getpixel((0, 5)) == 255 and g.getpixel((1, 7)) == 255  # descends 2 below the baseline
+    assert g.getpixel((left, 5)) == 255 and g.getpixel((left + 1, 7)) == 255  # 2 below the baseline
 
 
 def test_sheet_from_bdf_reports_clipping(image_bytes, tmp_path):
