@@ -101,6 +101,28 @@ def explain(stock: Firmware, built: Firmware, patch_files: list[Path] = ()) -> R
     return rep
 
 
+VERSION_REGIONS = {"firmware version (XML)", "header version", "backup header version", "CRC"}
+
+
+def os_changes(stock: Firmware, built: Firmware) -> list[int]:
+    """Offsets of changed bytes inside stage 3, the OS itself, other than its version string.
+    Pictures, fonts, strings and the GBK font are separate blobs; byte patches are what land here."""
+    stage = stock.blob("stage", 3)
+    m = updater.VERSION_RE.search(bytes(stock.buf))
+    a, b, out = stock.buf, built.buf, []
+    for start in range(stage.offset, stage.end, 0x1000):  # compare in pages, look closer only where they differ
+        end = min(start + 0x1000, stage.end)
+        if a[start:end] != b[start:end]:
+            out += [i for i in range(start, end) if a[i] != b[i] and not m.start(1) <= i < m.end(1)]
+    return out
+
+
+def is_stock(stock: Firmware, built: Firmware) -> bool:
+    """True if `built` is Sony's image apart from its version fields and CRC (what `restore` makes)."""
+    rep = explain(stock, built)
+    return built.problems() == [] and rep.ok and not rep.glyphs and set(rep.hits) <= VERSION_REGIONS
+
+
 def write_manifest(outdir: Path, version: str, patch_files: list[Path], mod: str | None):
     data = {"version": version, "mod": mod, "patches": [str(Path(p).resolve()) for p in patch_files]}
     (outdir / MANIFEST).write_text(json.dumps(data, indent=2), encoding="utf-8")

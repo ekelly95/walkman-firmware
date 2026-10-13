@@ -35,7 +35,7 @@ def test_stock_home_menu(stock_bytes):
     assert len([p for p in plist if p.section == 17]) == 12  # table, dispatch, cursor helper + bl, 8 count sites
     assert len([p for p in plist if p.section == patches.FILE]) == 6  # 3 kept entries x icon pair
     patches.apply(fw, plist)
-    assert [e.label for e in menus.home_menu(fw)][:5] == ["Photos", "Music", "Settings", "Playlists", "Go to song playback\screen"]
+    assert [e.label for e in menus.home_menu(fw)][:5] == ["Photos", "Music", "Settings", "Playlists", "Go to song playback\\screen"]
     with pytest.raises(FirmwareError):
         menus.hide(Firmware.from_bytes(stock_bytes), ["Bluetooth"])
 

@@ -21,9 +21,15 @@ Information tells builds apart (the installer itself never checks versions).
 uv run nwe39x status / devinfo                       # connected player, firmware, DEVINFO over SCSI
 uv run nwe39x build --mod mods/my-walkman -o out/x   # version = player's + 1 unless --version
 uv run nwe39x diff out/x/Data/Device/RKNANOFW.IMG    # names every changed byte; reads manifest.json
-uv run nwe39x flash --updater out/x                  # verifies against stock, copies, sends START FW UPDATE, waits (~15 s)
-uv run nwe39x restore -o out/stock-restore           # Sony's image, re-versioned
+uv run nwe39x restore                                # Sony's image, re-versioned, in out/stock-restore (flash needs it)
+uv run nwe39x flash --updater out/x                  # checks, asks "flash", copies, sends START FW UPDATE, waits (~15 s)
 ```
+
+`flash` refuses, before touching the player, an image with unexplained or mismatched bytes
+(`--force` skips only that), one that changes the OS itself (stage 3: byte patches such as
+volume-limit and menu hiding; pass `--allow-code-patches` once checked; themes, fonts, strings and
+pictures never need it), and any flash without a stock build in `out/stock-restore`. Then it asks
+for "flash" to be typed. An assistant passes `--yes` only after the user has approved that flash.
 
 Sony's files live in `extract/cab/` (ignored by git; `nwe39x unpack NW-E390_V1_01.exe` recreates
 it from the updater .exe in `download/`). Generated assets (theme pictures, glyph sheets,
@@ -35,7 +41,8 @@ A mod is a folder with `mod.toml` (`src/nwe39x/modspec.py`): `include` (other mo
 first), `theme` (preset name), `images`, `fonts`, `strings`, `patches`. `mods/README.md` lists
 them. `patches.tsv` lines are `section<TAB>run address<TAB>old<TAB>new<TAB>note`; `section` may
 be `file` for an absolute offset. Old bytes must match or the build refuses. `build` writes
-`manifest.json` beside the image; `flash` refuses unexplained bytes unless `--force`.
+`manifest.json` beside the image; `flash` refuses unexplained bytes unless `--force`, and OS
+changes unless `--allow-code-patches`.
 
 ## Hard rules
 

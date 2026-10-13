@@ -14,7 +14,7 @@ folder without a mod.toml uses its own images/, fonts/, strings.tsv and patches.
 ```
 nwe39x build --mod mods/my-walkman -o out/my-walkman      # version: one above the player's
 nwe39x diff out/my-walkman/Data/Device/RKNANOFW.IMG       # every changed byte, named
-nwe39x flash --updater out/my-walkman                     # refuses unexplained bytes unless --force
+nwe39x flash --updater out/my-walkman --allow-code-patches  # it has OS patches (volume-limit, no-fm)
 ```
 
 `build` writes `manifest.json` beside the image (version, mod, patch files used); `diff` and

@@ -20,7 +20,9 @@
   nwe39x build --mod DIR                   patched updater in out/updater from DIR's mod.toml (includes,
                                            theme, images, fonts, strings, patches); version from the player
   nwe39x restore                           Sony's stock firmware, re-versioned so it installs over a mod
-  nwe39x flash [IMG]                       install a built image directly (copy + START FW UPDATE over SCSI)
+                                           (out/stock-restore; flash refuses until it exists)
+  nwe39x flash [IMG]                       install a built image directly (copy + START FW UPDATE over SCSI);
+                                           OS byte patches need --allow-code-patches
   nwe39x devinfo                           the DEVINFO block the player returns over SCSI
 """
 
@@ -35,6 +37,7 @@ from .rknanofw import Firmware, FirmwareError, stage_sections
 
 DEFAULT_EXTRACT = Path("extract")
 DEFAULT_OUT = Path("out") / "updater"
+DEFAULT_RESTORE = Path("out") / "stock-restore"
 
 
 def stock_image(args) -> Path:
@@ -261,27 +264,52 @@ def cmd_devinfo(args):
 
 
 def cmd_flash(args):
-    if args.img:
-        img = Path(args.img)
-    else:
-        img = args.updater / updater.IMG
+    """Every check runs before anything touches the player: the image is explained against Sony's,
+    changes to the OS itself need --allow-code-patches, a stock-restore build must exist, and a
+    person types "flash" (or passes --yes) after seeing what will be installed where."""
+    img = Path(args.img) if args.img else args.updater / updater.IMG
     if not img.exists():
         raise FirmwareError(f"{img} not found; build it first or pass IMG")
-    if not args.force:
-        stock = args.cab / updater.IMG
-        manifest = verify.read_manifest(img.parent.parent.parent)
-        if not stock.exists():
-            raise FirmwareError(f"{stock} not found to verify against; pass --force to skip the check")
-        rep = verify.explain(Firmware.load(stock), Firmware.load(img), manifest["patches"] if manifest else [])
-        for line in rep.lines():
-            print("  " + line)
-        if rep.unknown:
-            raise FirmwareError(f"{len(rep.unknown)} changed bytes are not explained by the build's manifest"
-                                " (first at {:#x}); not flashing. Pass --force if you mean it.".format(rep.unknown[0]))
-        if rep.mismatched:
-            raise FirmwareError(f"{len(rep.mismatched)} bytes inside the manifest's patches are not the patches' new bytes"
-                                " (first at {:#x}); not flashing. Pass --force if you mean it.".format(rep.mismatched[0]))
+    stock_path = args.cab / updater.IMG
+    if not stock_path.exists():
+        raise FirmwareError(f"{stock_path} not found to check the image against; run `nwe39x unpack` first")
+    stock, built = Firmware.load(stock_path), Firmware.load(img)
+    manifest = verify.read_manifest(img.parent.parent.parent)
+    rep = verify.explain(stock, built, manifest["patches"] if manifest else [])
+    for line in rep.lines():
+        print("  " + line)
+    if not args.force and rep.unknown:
+        raise FirmwareError(f"{len(rep.unknown)} changed bytes are not explained by the build's manifest (first at "
+                            f"{rep.unknown[0]:#x}); not flashing. Rebuild with `nwe39x build`, or look at `nwe39x diff`.")
+    if not args.force and rep.mismatched:
+        raise FirmwareError(f"{len(rep.mismatched)} bytes inside the manifest's patches are not the patches' new bytes "
+                            f"(first at {rep.mismatched[0]:#x}); not flashing. Rebuild with `nwe39x build`.")
+    if (os_bytes := verify.os_changes(stock, built)) and not args.allow_code_patches:
+        in_os = set(os_bytes)
+        names = sorted({n for f in (manifest["patches"] if manifest else [])
+                        for s, e, n in patches.regions(stock, patches.parse_tsv(Path(f))) if in_os.intersection(range(s, e))})
+        names = names or ["(no patch names them)"]
+        raise FirmwareError(
+            f"this image changes {len(os_bytes)} bytes of the OS itself (stage 3, first at {os_bytes[0]:#x}): "
+            + "; ".join(names[:5]) + (f"; and {len(names) - 5} more" if len(names) > 5 else "")
+            + ". Themes, fonts, strings and pictures never do; byte patches (volume-limit, menu hiding) do, and a "
+            "wrong one can stop the player booting with no way back. Pass --allow-code-patches once you have checked them.")
+    restore = args.restore / updater.IMG
+    if restore.resolve() != img.resolve():
+        if not restore.exists():
+            raise FirmwareError(f"no stock-restore build at {args.restore}; make one first with "
+                                f"`nwe39x restore -o {args.restore}`, so there is a way back while the player still boots")
+        if not verify.is_stock(stock, Firmware.load(restore)):
+            raise FirmwareError(f"{restore} is not Sony's stock image (other than its version); rebuild it with "
+                                f"`nwe39x restore -o {args.restore}`")
     p = one_player(args)
+    print(f"about to install {img} ({updater.firmware_version(built)}) on the player at {p.root} "
+          f"(now {p.version}). There is no recovery if an install breaks the player.")
+    if not args.yes:
+        if not sys.stdin.isatty():
+            raise FirmwareError("flash asks for a typed confirmation; run it in a terminal, or pass --yes")
+        if input('type "flash" to install: ').strip() != "flash":
+            raise FirmwareError("not confirmed; nothing was sent to the player")
     version = flash.flash(img, p.root, wait=not args.no_wait)
     if version:
         print(f"done: the player reports {version}")
@@ -317,6 +345,12 @@ def main(argv: list[str] | None = None):
     p.add_argument("--drive", help="player's drive, e.g. D:/")
     p.add_argument("--no-wait", action="store_true", help="return right after sending the command")
     p.add_argument("--force", action="store_true", help="flash even if the image changes bytes the build did not declare")
+    p.add_argument("--allow-code-patches", action="store_true",
+                   help="allow changes to the OS itself (byte patches such as volume-limit or menu hiding); themes, "
+                        "fonts, strings and pictures never need it")
+    p.add_argument("--restore", type=Path, default=DEFAULT_RESTORE,
+                   help=f"stock-restore build that must exist first (default: {DEFAULT_RESTORE})")
+    p.add_argument("--yes", action="store_true", help="skip the typed confirmation (only once a person has approved this flash)")
     p.add_argument("--cab", type=Path, default=DEFAULT_EXTRACT / "cab", help="unpacked updater folder (stock image to verify against)")
     p.set_defaults(func=cmd_flash)
 
@@ -426,7 +460,7 @@ def main(argv: list[str] | None = None):
             p.add_argument("--fonts", help="folder of glyph sheets from `nwe39x fonts export`")
             p.add_argument("--patches", action="append", help="patches.tsv of code changes (repeatable)")
         p.add_argument("--version", help="version to install as, e.g. 1.03 (default: one above the player's)")
-        p.add_argument("-o", "--out", type=Path, default=DEFAULT_OUT)
+        p.add_argument("-o", "--out", type=Path, default=DEFAULT_OUT if name == "build" else DEFAULT_RESTORE)
         p.set_defaults(func=func)
 
     args = ap.parse_args(argv)

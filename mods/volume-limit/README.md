@@ -7,8 +7,8 @@ EQ headroom limiter) is untouched. Background and addresses: NOTES.md, "Volume l
 
 ```
 nwe39x build --mod mods/volume-limit -o out/volume-limit --version 1.12
-nwe39x flash --updater out/volume-limit
 nwe39x diff out/volume-limit/Data/Device/RKNANOFW.IMG
+nwe39x flash --updater out/volume-limit --allow-code-patches
 ```
 
 What to check on the player: that volume above 17 is reachable straight after power-on with no
