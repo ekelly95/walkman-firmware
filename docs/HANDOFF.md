@@ -91,7 +91,8 @@ changes unless `--allow-code-patches`.
   128 Photo Settings, 135 FM Radio Settings, 142 Sleep Timer Settings, 148 Common Settings,
   167 Language Settings).
 - SCSI: `FC 00 04 "dbmn"` = START FW UPDATE, `FC 00 20 "dbmn"` + 0x80 in = DEVINFO
-  (`flash.py`, Windows pass-through, no elevation). The handler is stage 3 section 12 (dispatcher
+  (`flash.py`: Windows pass-through, no elevation; Linux SG_IO on /dev/sgN, untested on the player,
+  gated by NWE39X_LINUX_FLASH=1, see docs/linux.md). The handler is stage 3 section 12 (dispatcher
   `0x306dc00`, `cmp #0xfc` at `0x306dc54`), loaded with the USB app (section 10).
 
 ## Open items, in the order I would take them

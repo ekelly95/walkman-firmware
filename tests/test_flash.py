@@ -1,3 +1,6 @@
+import sys
+from pathlib import Path
+
 import pytest
 
 from nwe39x import flash
@@ -26,3 +29,28 @@ def test_flash_refuses_bad_image(tmp_path):
     bad.write_bytes(bytes(0x400))
     with pytest.raises(FirmwareError):
         flash.flash(bad, tmp_path)
+
+
+def test_mount_devnum_reads_mountinfo():
+    info = ("22 1 259:2 / / rw - ext4 /dev/nvme0n1p2 rw\n"
+            "90 22 8:17 / /media/me/WALKMAN rw - vfat /dev/sdb1 rw\n"
+            "91 22 8:33 / /media/me/MY\\040DISK rw - vfat /dev/sdc1 rw\n")
+    assert flash.mount_devnum(info, Path("/media/me/WALKMAN")) == "8:17"
+    assert flash.mount_devnum(info, Path("/media/me/MY DISK/")) == "8:33"
+    with pytest.raises(FirmwareError):
+        flash.mount_devnum(info, Path("/media/me/OTHER"))
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="sysfs names like 8:17 can't be Windows file names")
+def test_scsi_device_prefers_sg(tmp_path):
+    sysfs, proc = tmp_path / "sys", tmp_path / "proc"
+    (proc / "self").mkdir(parents=True)
+    (proc / "self/mountinfo").write_text("90 22 8:17 / /media/me/WALKMAN rw - vfat /dev/sdb1 rw\n"
+                                         "91 22 8:32 / /media/me/RAW rw - vfat /dev/sdc rw\n")
+    disk = sysfs / "dev/block"  # stands in for /sys/block/sdb: the partition's parent
+    (disk / "8:17").mkdir(parents=True)
+    (disk / "8:17/partition").write_text("1")
+    (disk / "device/scsi_generic/sg2").mkdir(parents=True)
+    assert flash.scsi_device(Path("/media/me/WALKMAN"), sysfs, proc) == "/dev/sg2"
+    (disk / "8:32").mkdir()  # a whole disk with no sg node falls back to its own block device
+    assert flash.scsi_device(Path("/media/me/RAW"), sysfs, proc) == "/dev/8:32"

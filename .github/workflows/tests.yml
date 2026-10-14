@@ -1,7 +1,7 @@
 # The offline test suite on every push. Tests that need Sony's firmware image skip here: the
 # repository ships no Sony files, so CI runs on the synthetic images in tests/conftest.py.
-# Windows is where the tool flashes players; Linux checks that building and previewing stay
-# portable.
+# Windows is where the tool flashes players; Linux checks that building, previewing and the SG_IO
+# device lookup stay portable.
 name: tests
 
 on:

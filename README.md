@@ -25,7 +25,8 @@ inside it, and installs the result. The player still runs Sony's firmware, with 
   Sony's firmware never had: a launcher for small apps of your own (see [Apps](#apps)).
 - It ships **no Sony files**. You download Sony's updater yourself; everything is built on your
   PC.
-- Installing needs **Windows** (it talks to the player over USB the way Sony's tool does).
+- Installing is tested on **Windows** (it talks to the player over USB the way Sony's tool does). A
+  Linux path exists but is untested on a player: see [docs/linux.md](docs/linux.md).
   Building and previewing work wherever Python does.
 
 ## What you can change
