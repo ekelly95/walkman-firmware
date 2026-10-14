@@ -5,6 +5,7 @@
  *
  * List: up/left move up, down/right move down, the pad center opens, OPTION goes home.
  * In an app: hold BACK to come back to the list, whatever the app does with keys.
+ * The volume buttons work in the list and in small apps (key_global), as in Sony's menus.
  * Every key event restarts the screen timeout; apps that animate without input (games) hold the
  * screen on with screen_hold/screen_release. */
 #include "nwapp.h"
@@ -20,6 +21,7 @@ static char names[SLOTS][16];   /* "" = no app in that slot */
 static u8 big[SLOTS];           /* ABI 2 */
 static int count, sel, dirty;
 static const struct nwapp *running;
+static int running_big;
 static char status[24];
 
 static void name83(char out[12], int n)   /* "APPn    BIN" */
@@ -81,7 +83,7 @@ static void run(int n)
     unsigned size = file_size(f), got = 0, max = big[n] ? NWAPP_BIG_MAX : NWAPP_MAX;
     if (size < sizeof *h || size > max) {
         file_close(f);
-        fail("file too big");
+        fail(size < sizeof *h ? "file too small" : "file too big");
         return;
     }
     if (big[n])
@@ -103,6 +105,7 @@ static void run(int n)
         *p = 0;
     status[0] = 0;
     running = h;
+    running_big = big[n];
     running->start();
 }
 
@@ -171,6 +174,10 @@ static int keys(void)
     if (!ev)
         return 0;
     screen_activity();   /* a key press restarts the screen timeout, as in Sony's menus */
+    /* Volume and HOLD, as Sony's menus pass them on: the core applies the volume every pass. Big
+     * apps have stopped the music, so they get those buttons themselves. */
+    if (!(running && running_big) && key_global(ev))
+        return 0;
     if (running) {
         if (ev == KEY_EV(EV_LONG, KEY_BACK) || running->key(ev))
             back_to_list();

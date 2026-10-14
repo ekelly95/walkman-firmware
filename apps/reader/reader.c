@@ -91,9 +91,9 @@ static u32 decode(u32 *pos)
             ok &= (b & 0xc0) == 0x80;
             cp = cp << 6 | (b & 0x3f);
         }
-        if (ok && cp >= 0x80 && cp <= 0xffff) {   /* the font has nothing beyond the BMP */
+        if (ok && cp >= 0x80) {
             *pos = p + n + 1;
-            return cp;
+            return cp <= 0xffff ? cp : '?';   /* emoji and the like: the font stops at U+FFFF */
         }
     }
     *pos = p + 1;
@@ -132,6 +132,10 @@ static u32 line_at(u32 pos, u16 *out, int max)
         }
         if (cp == '\t')
             cp = ' ';
+        else if (cp < 0x20 || (cp >= 0x7f && cp < 0xa0)) {   /* other control characters */
+            p = q;
+            continue;
+        }
         int cw = char_width(cp);
         if (w + cw > TEXT_W && n) {
             if (cp == ' ') {            /* the space that would overflow ends the line */

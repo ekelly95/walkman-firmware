@@ -185,6 +185,10 @@ was checked against the bytes.
   `mods/volume-limit` remain the way to lift the cap. Checked with a capstone scan of every
   section for stores resolving to `0x4bba` (it finds the known `+0x355` writers), every
   `strb/strh/str ... #0x4a]`, and every call with `r0 = 0x4b70`.
+- Correction (2026-10-13): section 10 is the **USB app** (app 10 in the app table, "USB"), not
+  boot code, so the clamp at `0x306ea96` and the reset-to-13 at `0x306eb16` run when the USB app
+  starts. The volume-limit patch there sits in the reflash path (sections 0, 9, 10, 12); it has
+  been on the player for every flash since 1.25, so it is known safe.
 - **Section 35 `0x307890e` is not the cap.** It runs only when EqMode == 5 and lowers the EQ's
   `max_DbGain` from 12 dB to 2 dB in steps as the volume rises (a harder ladder when the byte is
   0), i.e. headroom so a boosted EQ does not clip. Patching it out makes nothing louder.

@@ -56,7 +56,7 @@ int main(int argc, char **argv)
     u32 chars_in = 0, chars_out = 0;
     for (u32 p = pos; p < book_len;) {   /* count non-space characters in the source */
         u32 c = decode(&p);
-        if (c > ' ') chars_in++;
+        if (c > ' ' && !(c >= 0x7f && c < 0xa0)) chars_in++;   /* the reader skips C1 controls */
     }
     while (pos < book_len) {
         u16 line[64];

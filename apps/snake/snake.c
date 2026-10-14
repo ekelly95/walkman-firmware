@@ -19,7 +19,8 @@ enum { PLAYING, PAUSED, OVER };
 
 static u16 body[CELLS];          /* ring buffer of cells (y * COLS + x), head at body[head] */
 static u8 occupied[CELLS];
-static int head, length, grow, dir, next_dir, food, state, score, best, redraw_all, redraw_score;
+static int head, length, grow, dir, food, state, score, best, redraw_all, redraw_score;
+static int turns[2], n_turns;   /* turns pressed since the last step, applied one per step */
 static u32 last_step;
 static int held;                 /* we hold the screen on while PLAYING */
 
@@ -72,7 +73,8 @@ static void new_game(void)
         occupied[body[i]] = 1;
     }
     grow = 0;
-    dir = next_dir = 1;
+    dir = 1;
+    n_turns = 0;
     score = 0;
     set_state(PLAYING);
     place_food();
@@ -88,8 +90,11 @@ static int period(void)          /* ticks (10 ms) per step: 150 ms, down to 60 m
 
 static void step(void)
 {
-    if ((next_dir ^ dir) != 2)   /* no reversing into yourself */
-        dir = next_dir;
+    if (n_turns) {               /* queued turns were checked against each other when pressed */
+        dir = turns[0];
+        turns[0] = turns[1];
+        n_turns--;
+    }
     int h = body[head], x = h % COLS + DX[dir], y = h / COLS + DY[dir];
     if (x < 0 || x >= COLS || y < 0 || y >= ROWS) {
         set_state(OVER);
@@ -183,10 +188,12 @@ static int key(u32 ev)
             redraw_score = 1;
         }
     } else if (state == PLAYING) {
-        if (k == KEY_UP) next_dir = 0;
-        else if (k == KEY_RIGHT) next_dir = 1;
-        else if (k == KEY_DOWN) next_dir = 2;
-        else if (k == KEY_LEFT) next_dir = 3;
+        int d = k == KEY_UP ? 0 : k == KEY_RIGHT ? 1 : k == KEY_DOWN ? 2 : k == KEY_LEFT ? 3 : -1;
+        int last = n_turns ? turns[n_turns - 1] : dir;
+        /* Queue up to two turns, so a quick up-then-left between steps keeps both; ignore a
+         * press that repeats the last direction or reverses it. */
+        if (d >= 0 && d != last && (d ^ last) != 2 && n_turns < 2)
+            turns[n_turns++] = d;
     }
     return 0;
 }

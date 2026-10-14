@@ -35,7 +35,11 @@ SDK = Path(__file__).resolve().parent.parent / "apps" / "sdk"
 NWAPP_LOAD, NWAPP_MAGIC = 0x306D000, 0x5041574E
 NWAPP_MAX = {1: 0x4E00, 2: 0x22000}   # by ABI: small apps, big apps (nwapp.h)
 CFLAGS = ["-mcpu=cortex-m3", "-mthumb", "-Os", "-ffreestanding", "-nostdlib", "-fno-builtin",
-          "-fno-zero-initialized-in-bss", "-fno-common", "-ffunction-sections", "-Wall", "-Wextra"]
+          "-fno-common", "-ffunction-sections", "-Wall", "-Wextra"]
+# The slot loader copies data but has no bss of ours to zero, so slot builds keep zeros in .data.
+# .BIN apps leave bss out of the file: the launcher zeroes everything past the file up to `end`.
+SLOT_CFLAGS = ["-fno-zero-initialized-in-bss"]
+NWAPP_HEAP = 0x3024000              # big apps' heap (nwapp.h): slot data must end below it
 
 
 def run(cmd: list[str], cwd: Path):
@@ -45,13 +49,13 @@ def run(cmd: list[str], cwd: Path):
         subprocess.run(["wsl.exe", "--cd", str(cwd.resolve()), "-e", *cmd], check=True)
 
 
-def compile_app(src: Path, ld: Path, sections: list[str]) -> list[bytes]:
+def compile_app(src: Path, ld: Path, sections: list[str], extra: list[str] = ()) -> list[bytes]:
     """Compile src/*.c with the SDK, link with `ld`, return the raw bytes of each output section."""
     out = src / "build"
     out.mkdir(exist_ok=True)
     rel = lambda p: os.path.relpath(p, src).replace("\\", "/")  # noqa: E731
     sources = sorted(f.name for f in src.glob("*.c")) + [rel(SDK / "ui.c"), rel(SDK / "rt.c")]
-    run(["arm-none-eabi-gcc", *CFLAGS, f"-I{rel(SDK)}", "-T", rel(ld), "-Wl,--gc-sections",
+    run(["arm-none-eabi-gcc", *CFLAGS, *extra, f"-I{rel(SDK)}", "-T", rel(ld), "-Wl,--gc-sections",
          "-o", "build/app.elf", *sources], src)
     blobs = []
     for s in sections:
@@ -100,9 +104,11 @@ def main():
     if PLACE < fw.blobs_end:
         sys.exit(f"free space starts at {fw.blobs_end:#x}, after {PLACE:#x}")
 
-    text, data = compile_app(args.app, args.app / "slot.ld", [".text", ".data"])
+    text, data = compile_app(args.app, args.app / "slot.ld", [".text", ".data"], SLOT_CFLAGS)
     if CODE_PA + len(text) > NWAPP_LOAD:
         sys.exit(f"slot code ends at {CODE_PA + len(text):#x}, past {NWAPP_LOAD:#x} where .BIN apps load")
+    if DATA_PA + len(data) > NWAPP_HEAP:
+        sys.exit(f"slot data ends at {DATA_PA + len(data):#x}, past {NWAPP_HEAP:#x} where the big-app heap starts")
     if len(data) < 28:
         sys.exit("no app descriptor at the start of .data")
     code_at = PLACE

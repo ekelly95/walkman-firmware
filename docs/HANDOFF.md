@@ -12,7 +12,7 @@ Python 3.12, `uv`, package `nwe39x` in `src/`, CLI `uv run nwe39x ...`. Tests:
 `uv run pytest -q` (81 pass). **NOTES.md is the knowledge base**:
 every reverse-engineering fact, with addresses, lives there; read it first and keep it current.
 
-The player (one unit, serial in `nwe39x devinfo`) is on **1.32 = `mods/my-walkman` + `mods/demo-mode` + `mods/launcher`** (Photos opens the launcher; on the drive `APP1.BIN` = keytest, `APP2.BIN` = snake, `APP3.BIN` = bigtest): matrix
+The player (one unit, serial in `nwe39x devinfo`) is on **1.33 = `mods/my-walkman` + `mods/demo-mode` + `mods/launcher`** (Photos opens the launcher; on the drive `APP1.BIN` = keytest, `APP2.BIN` = snake, `APP3.BIN` = bigtest, `APP4.BIN` = reader, plus `BOOK0.TXT`): matrix
 theme (everything green, alert rings included) with the letter-jump letter green too
 (`letter-jump-color`), Terminus 12 in the menu font, photo boot/power-off screens
 (`bootscreen-photo`: aurora "Hello Again", green light "See You Later"), volume cap off. FM Radio is back in both menus (the user uses it; `no-fm`/`no-fm-settings` stay as
@@ -54,10 +54,14 @@ changes unless `--allow-code-patches`.
   loader (071b:3226). The installer (stage 3 section 9) checks magic, size rule and backup header,
   not the CRC, and writes the header last. Nothing in the tools stops a patch from breaking boot:
   `problems()` and `diff` check the image's shape and that every changed byte is declared, not
-  what a patch does. So patch pre-UI code only when needed and minimally (the volume-limit
-  section 10 patch is one, running on the player now), check each encoding with capstone, never
-  touch the entry vector, the loader or the installer (section 9), never bypass
-  `Firmware.problems()` or the flash gate, and keep `out/stock-restore` current.
+  what a patch does. **The reflash path is stage 3 itself**: section 0 (boot, USB events),
+  section 9 (the installer), section 10 (the USB app) and section 12 (mass storage and the `0xFC`
+  update command). An image that breaks any of them cannot be flashed again. Check every code
+  patch's section against that list. The one patch already in it is volume-limit's at section 10
+  `0x306ea9a`; it has been on the player for every flash since 1.25 with USB and flashing intact.
+  Patch code only when needed and minimally, check each encoding with capstone, never touch the
+  entry vector or the installer, never bypass `Firmware.problems()` or the flash gate, and keep
+  `out/stock-restore` current.
 - Flashing is the user's hardware; ask before anything that is not a normal build-and-flash.
 - Commit style: short title, body says what and why, `Co-Authored-By` line. Push to `origin main`.
   American spelling (color, gray, center, -ize) in code, docs and commits.
@@ -87,7 +91,8 @@ changes unless `--allow-code-patches`.
   128 Photo Settings, 135 FM Radio Settings, 142 Sleep Timer Settings, 148 Common Settings,
   167 Language Settings).
 - SCSI: `FC 00 04 "dbmn"` = START FW UPDATE, `FC 00 20 "dbmn"` + 0x80 in = DEVINFO
-  (`flash.py`, Windows pass-through, no elevation). The handler is in the NAND loader, not stage 3.
+  (`flash.py`, Windows pass-through, no elevation). The handler is stage 3 section 12 (dispatcher
+  `0x306dc00`, `cmp #0xfc` at `0x306dc54`), loaded with the USB app (section 10).
 
 ## Open items, in the order I would take them
 
