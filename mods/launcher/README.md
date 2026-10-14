@@ -40,6 +40,10 @@ uv run nwe39x flash --updater out/launcher --allow-code-patches
 - two home-menu patches in section 17: skip the "no photos" check (`0x306c5a2`) and switch to app 7
   instead of 16 (`0x306c5ac`).
 
+Big apps (ABI 2) stop music first: the launcher removes the background tasks that live in, or run
+code from, overlay memory, then loads up to 136 KiB and lends the app a 164 KiB heap. The list
+says "big app: stops music" when one is selected.
+
 ## How it runs an app
 
 On a pick it opens `\APPn.BIN`, reads it in 2 KiB chunks to `0x306d000`, checks the header

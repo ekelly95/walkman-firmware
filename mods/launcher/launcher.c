@@ -1,6 +1,7 @@
 /* launcher: app slot 7 (Ebook, compiled out by Sony), opened from the home menu's Photos icon.
  * Lists \APP0.BIN .. \APP9.BIN from the player's drive and runs the one picked: the .BIN is
- * read to NWAPP_LOAD and the launcher forwards keys and draw calls to it (nwapp.h).
+ * read to NWAPP_LOAD and the launcher forwards keys and draw calls to it (nwapp.h). Big apps
+ * (ABI 2) stop music and background tasks first, and get far more memory.
  *
  * List: up/left move up, down/right move down, the pad center opens, OPTION goes home.
  * In an app: hold BACK to come back to the list, whatever the app does with keys.
@@ -16,6 +17,7 @@
 #define KEY_EV(type, key) (((u32)(type) << 28) | (key))
 
 static char names[SLOTS][16];   /* "" = no app in that slot */
+static u8 big[SLOTS];           /* ABI 2 */
 static int count, sel, dirty;
 static const struct nwapp *running;
 static char status[24];
@@ -46,6 +48,7 @@ static void scan(void)
         if (f < 0)
             continue;
         if (file_read(&h, sizeof h, f) == sizeof h && h.magic == NWAPP_MAGIC) {
+            big[n] = h.abi == NWAPP_ABI_BIG;
             copy_name(names[n], h.name);
             if (!names[n][0])
                 copy_name(names[n], "(no name)");
@@ -57,6 +60,8 @@ static void scan(void)
         for (sel = 0; sel < SLOTS && !names[sel][0]; sel++)
             ;
 }
+
+static void stop_overlay_tasks(void);
 
 static void fail(const char *why)
 {
@@ -73,12 +78,14 @@ static void run(int n)
     int f = file_open("\\", nm, "R");
     if (f < 0)
         { fail("cannot open file"); return; }
-    unsigned size = file_size(f), got = 0;
-    if (size < sizeof *h || size > NWAPP_MAX) {
+    unsigned size = file_size(f), got = 0, max = big[n] ? NWAPP_BIG_MAX : NWAPP_MAX;
+    if (size < sizeof *h || size > max) {
         file_close(f);
         fail("file too big");
         return;
     }
+    if (big[n])
+        stop_overlay_tasks();        /* frees the audio code's memory; the core's tasks keep running */
     while (got < size) {
         unsigned want = size - got < CHUNK ? size - got : CHUNK;
         unsigned r = file_read(mem + got, want, f);
@@ -89,14 +96,40 @@ static void run(int n)
     file_close(f);
     if (got != size)
         { fail("read error"); return; }
-    if (h->magic != NWAPP_MAGIC || h->abi != NWAPP_ABI || h->load != NWAPP_LOAD
-        || h->end < NWAPP_LOAD + size || h->end > NWAPP_LOAD + NWAPP_MAX)
-        { fail("not a v1 app"); return; }
+    if (h->magic != NWAPP_MAGIC || h->abi != (big[n] ? NWAPP_ABI_BIG : NWAPP_ABI)
+        || h->load != NWAPP_LOAD || h->end < NWAPP_LOAD + size || h->end > NWAPP_LOAD + max)
+        { fail("bad app header"); return; }
     for (u8 *p = mem + size; p < (u8 *)h->end; p++)   /* bss beyond the file, if any */
         *p = 0;
     status[0] = 0;
     running = h;
     running->start();
+}
+
+/* Overlay memory: the shared data and code regions that apps, the audio code and USB mode load
+ * into. A big app overwrites most of both. */
+static int in_overlay(u32 a)
+{
+    return (a >= 0x3023010 && a < 0x3050000) || (a >= 0x306ba84 && a < 0x3090000);
+}
+
+/* Stop the background tasks that live in, or run code from, overlay memory (music playback is
+ * one), and keep the core's own (the status bar and the like, all in section 0). */
+static void stop_overlay_tasks(void)
+{
+    for (int again = 1; again;) {
+        again = 0;
+        for (struct task *t = *(struct task **)TASK_LIST; t; t = t->next) {
+            int hit = in_overlay((u32)t);
+            for (int i = 0; i < 5; i++)
+                hit |= in_overlay((u32)t->fn[i]);
+            if (hit) {
+                task_remove(TASK_LIST, t);
+                again = 1;
+                break;
+            }
+        }
+    }
 }
 
 static void back_to_list(void)
@@ -186,6 +219,8 @@ static void draw(void)
     }
     if (status[0])
         ui_text(4, 134, status, UI_GREEN);
+    else if (count && big[sel])
+        ui_text(4, 134, "big app: stops music", UI_GRAY);
     else if (count)
         ui_text(4, 134, "center: run", UI_GRAY);
     ui_text(4, 148, "OPTION: home", UI_GRAY);

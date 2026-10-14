@@ -6,9 +6,16 @@
 #include "fw.h"
 
 #define NWAPP_MAGIC 0x5041574eu   /* "NWAP" */
-#define NWAPP_ABI   1
+#define NWAPP_ABI   1              /* small app: music keeps playing */
+#define NWAPP_ABI_BIG 2            /* big app: the launcher stops music and background tasks first */
 #define NWAPP_LOAD  0x0306d000u    /* in the app overlay region, after the launcher */
-#define NWAPP_MAX   0x4e00u        /* up to 0x3071e00, below section 14 at 0x3071e64 */
+#define NWAPP_MAX   0x4e00u        /* small: up to 0x3071e00, below section 14 (audio) at 0x3071e64 */
+#define NWAPP_BIG_MAX 0x22000u     /* big: up to 0x308f000, below section 2's live data at 0x3090000 */
+
+/* Big apps also get this much RAM in the overlay data region, which the audio code and USB mode
+ * use otherwise. Contents do not survive leaving the app. */
+#define NWAPP_HEAP      ((void *)0x03024000)
+#define NWAPP_HEAP_SIZE 0x29000u   /* to 0x304d000 */
 
 struct nwapp {
     u32 magic, abi;
@@ -21,8 +28,10 @@ struct nwapp {
 };
 
 extern char __nwapp_end[];
-#define NWAPP(title, start, key, draw, stop) \
+#define NWAPP_DECLARE(abi, title, start, key, draw, stop) \
     __attribute__((section(".nwapp"), used)) const struct nwapp nwapp_header = \
-        {NWAPP_MAGIC, NWAPP_ABI, NWAPP_LOAD, (u32)__nwapp_end, title, start, key, draw, stop}
+        {NWAPP_MAGIC, abi, NWAPP_LOAD, (u32)__nwapp_end, title, start, key, draw, stop}
+#define NWAPP(title, start, key, draw, stop) NWAPP_DECLARE(NWAPP_ABI, title, start, key, draw, stop)
+#define NWAPP_BIG(title, start, key, draw, stop) NWAPP_DECLARE(NWAPP_ABI_BIG, title, start, key, draw, stop)
 
 #endif

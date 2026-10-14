@@ -221,10 +221,15 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
   referenced by number either, so the UI reaches pictures through something indirect; but the
   five patterns never appear together in any table. Most likely they are leftovers of Rockchip's
   reference design, or driven by a factory tool over USB with code that is not in this image.
-- **The vendor SCSI handler is not in stage 3 either**: no `dbmn`, no `0xFC` dispatch (the one
-  `cmp #0xfc` ladder in section 31 is a UTF-8 lead-byte decoder). USB mass storage and the
-  `FC 04` install trigger therefore live in the boot loader / NAND loader outside this image,
-  which is also why the trigger works whatever firmware is installed.
+- **Correction (2026-10-13): the USB stack and the vendor SCSI handler *are* in stage 3.** Section
+  12 (loaded by the USB app, section 10) holds the mass-storage driver: its data has the INQUIRY
+  string `SONY    WALKMAN         1.00`, and its command dispatcher at `0x306dc00` compares the
+  opcode with `0x25`, `0x1a`, `0x12`, `0x28`, `0x2a`, **`0xfc`** (`0x306dc54`, handler at
+  `0x306e1ce`) and `0xff`. The earlier search looked for `dbmn` and a `cmp #0xfc` and missed this
+  one (the signature is not compared as a string or a 32-bit literal). The USB event code
+  (`USB:VBUS INSERT`, ...) is in section 0. **Consequence: the update path belongs to the OS we
+  install.** An image that breaks section 0's boot, the USB app (10), the mass-storage driver (12)
+  or the installer (9) takes away the only known way to flash the player again.
 - **Demo mode** (strings "Enter Demo mode" / "Exit Demo mode", section 0 at `0x30603f4`): a
   store-demo mode, not a test mode. Toggled by a secret sequence of **15 key events**: for key
   events with `[event+0x10] == 2`, a counter at `[event+3]` advances while each key `[event+8]`
@@ -348,6 +353,38 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
 - `0x3067cdc(ev)` is the global key handler (not a "keys blocked" check): volume ± (`0x10000004`,
   `0x10000100`) become event flags `0x12`/`0x13`, HOLD `0x800` shows its icon; the home menu calls
   it with each event before its own handling.
+
+## Big apps and the background tasks (2026-10-13, works on the player as 1.32)
+
+- RAM map from the section table (`0x3000000`..`0x30a0000`, about 640 KiB; stack below
+  `0x3004000`): section 0 keeps `0x3004000`-`0x302300c` (data and bss) and `0x3050000`-`0x306a9a8`
+  (code); section 2's data and bss are `0x3090000`-`0x3097e4c` (the RAM mirrored at `0x0`).
+  Everything else is overlay memory shared by whoever is loaded: data `0x3023010`-`0x304dbe2`
+  (170 KiB) and code `0x306ba84`-`0x308f2a8` (142 KiB). The largest users are the media database
+  builder (section 41, run after USB: 138 KiB code, 145 KiB bss) and, during playback, the audio
+  code (sections 14-16, 35, 36-59: code `0x3071e64`-`0x307cf74`, data `0x30258f8`-`0x304dbe2`).
+  Never used by any section: `0x3097e4c`-`0x309e000` (24 KiB; may be heap or buffers, not checked).
+- Background tasks are a linked list headed at RAM `0x77ac`, run every dispatcher pass by
+  `0x3056a64`. Each task has the app descriptor's shape (links, then five functions; `+0x10`
+  stop). `0x30568c0(list, task, msg)` adds one, `0x3056a50(head, task)` tests, `0x30569a8(&head,
+  task)` unlinks and calls stop, `0x3056a0c(&head)` stops all (the core calls it right before
+  switching to USB mode, `0x306472e`). The core's own tasks are in section 0 data (`0x3004470`,
+  `0x300448c`, `0x30044a8` (the home menu re-adds it often; probably the status bar), `0x30044c4`,
+  `0x30044e0`, `0x30044fc`), all with code in section 0. Music's task is `0x3036684`, inside
+  section 35's data; apps add their own in their data (`0x3023xxx`).
+- **Big apps** (`apps/sdk/nwapp.h`, ABI 2): before loading one, the launcher removes every task that
+  lives in, or has a function in, overlay memory (music stops; the core's tasks keep running), then
+  the app gets `0x306d000`-`0x308f000` (136 KiB) for its image and `0x3024000`-`0x304d000` (164 KiB)
+  as a heap. Overlay loads elsewhere do not interfere: section 0's own are section 8 and the FM
+  init (section 57, "FmPowerOnInit") at boot, and the audio code's sections 142-145 at `0x1000000`;
+  tag parsers (section 14) are loaded per track, so playback reloads what it needs. `apps/bigtest`
+  (a 97 KiB image with a 96 KiB table, plus a full heap write/read) reads back with 0 bad words, and
+  music plays normally afterwards.
+- Cosmetic, after a big app: the home menu's status bar shows a black box at `x 44-83, y 0-13` (the
+  "DEMO" spot) for a while. The home draw (section 17, flag `0x39`) fills that rectangle black when
+  byte `0x560b` is 0 (only section 13, the picture viewer, writes it; section 0 reads it at
+  `0x3067ee4`); presumably music's task normally paints over it. Stopping all tasks (1.31) and only
+  the overlay ones (1.32) both show it. Not chased further.
 
 ## Brick insurance (2026-10-12)
 

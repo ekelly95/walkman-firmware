@@ -77,6 +77,18 @@ enum { EV_PRESS = 1, EV_LONG = 2, EV_REPEAT = 3, EV_RELEASE = 4, EV_LONG_RELEASE
 #define SYST_CSR        (*(volatile u32 *)0xE000E010)
 #define SYST_CVR        (*(volatile u32 *)0xE000E018)
 
+/* Background tasks (music playback, the status bar, ...) are a linked list headed at RAM 0x77ac
+ * that the dispatcher runs every pass. A task has the app descriptor's shape: links, then five
+ * functions. task_remove unlinks one and calls its stop; tasks_stop_all stops them all, as the
+ * core does before USB mode. The core's own tasks live in section 0 (data 0x30044xx). */
+struct task {
+    struct task *prev, *next;
+    void (*fn[5])(void);
+};
+#define TASK_LIST       ((void *)0x77ac)    /* points at the first task */
+#define task_remove     FW(0x30569a8, int (*)(void *list, struct task *t))
+#define tasks_stop_all  FW(0x3056a0c, int (*)(void *list))
+
 struct text_color { u16 fg, bg, flags; };   /* flags bit 0: transparent background, bit 1: swap */
 #define text_color      ((volatile struct text_color *)0x551c)
 

@@ -12,6 +12,7 @@ uv run python -I scripts/build_app.py --bin apps/keytest    # -> apps/keytest/bu
 |---|---|
 | keytest | the last 8 key events as hex: which button sends which code |
 | snake | Snake: the pad steers, center pauses; holds the screen on while playing |
+| bigtest | a big app: checks a 96 KiB table in its own image and the 164 KiB heap |
 
 ## Writing one
 
@@ -47,7 +48,10 @@ NWAPP("Hello", start, key, draw, stop);
   and while it is off `draw()` is not called at all. An app that moves on its own, like a game,
   calls `screen_hold()` while it runs and `screen_release()` when it stops (also in `stop()`).
 - `ui_ticks()` counts 10 ms ticks from the firmware's SysTick; `ui_random()` gives random numbers.
-- The whole app (code, data and bss) gets 0x4e00 bytes (19.5 KiB) at `0x306d000`. It is reloaded
-  fresh each time it is opened, so nothing survives in memory between runs; use a file for that.
+- A small app (`NWAPP(...)`) gets 0x4e00 bytes (19.5 KiB) at `0x306d000` for code, data and bss,
+  and music keeps playing. A **big app** (`NWAPP_BIG(...)`) gets 0x22000 bytes (136 KiB) there plus
+  `NWAPP_HEAP`, 0x29000 bytes (164 KiB); the launcher stops music first, because big apps use the
+  audio code's memory. Either way the app is loaded fresh each time it opens, so nothing survives
+  in memory between runs; use a file for that.
 
 A crash or a hang in an app does not touch the firmware: hold OPTION/PWR to turn the player off.

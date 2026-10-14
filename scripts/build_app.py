@@ -32,7 +32,8 @@ APP_TABLE = 0x3090a34                # section 2 data: descriptor pointer per ap
 CODE_PA, DATA_PA = 0x306C4A4, 0x3023010
 PLACE = 0xC94200                     # file offset for app code: after the last blob (0xc9411e)
 SDK = Path(__file__).resolve().parent.parent / "apps" / "sdk"
-NWAPP_LOAD, NWAPP_MAX, NWAPP_MAGIC = 0x306D000, 0x4E00, 0x5041574E
+NWAPP_LOAD, NWAPP_MAGIC = 0x306D000, 0x5041574E
+NWAPP_MAX = {1: 0x4E00, 2: 0x22000}   # by ABI: small apps, big apps (nwapp.h)
 CFLAGS = ["-mcpu=cortex-m3", "-mthumb", "-Os", "-ffreestanding", "-nostdlib", "-fno-builtin",
           "-fno-zero-initialized-in-bss", "-fno-common", "-ffunction-sections", "-Wall", "-Wextra"]
 
@@ -64,12 +65,15 @@ def build_bin(src: Path):
     magic, abi, load, end = struct.unpack_from("<4I", image)
     if magic != NWAPP_MAGIC or load != NWAPP_LOAD:
         sys.exit("no NWAPP(...) header at the start of the image")
-    if end - load > NWAPP_MAX:
-        sys.exit(f"app needs {end - load} bytes; the limit is {NWAPP_MAX}")
+    if abi not in NWAPP_MAX:
+        sys.exit(f"unknown ABI {abi}")
+    limit = NWAPP_MAX[abi]
+    if end - load > limit:
+        sys.exit(f"app needs {end - load} bytes; the limit for ABI {abi} is {limit}")
     name = image[16:32].split(bytes(1))[0].decode("ascii", "replace")
     dest = src / "build" / f"{src.name.upper()[:8]}.BIN"
     dest.write_bytes(image)
-    print(f"{dest}: \"{name}\", {len(image)} bytes ({end - load} with bss) of {NWAPP_MAX}. "
+    print(f"{dest}: \"{name}\", {'big app, ' if abi == 2 else ''}{len(image)} bytes ({end - load} with bss) of {limit}. "
           f"Copy it to the player's top folder as APP0.BIN .. APP9.BIN.")
 
 
