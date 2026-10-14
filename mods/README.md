@@ -30,7 +30,7 @@ no-fm patches, the clean boot screens) are not committed; each mod's README says
 | bootscreen-photo | boot and power-off screens from photos, captioned in Terminus (`nwe39x bootscreen`) |
 | font-terminus | Terminus 12 in the menu font |
 | volume-limit | no 17-step cap |
-| hello-app | our own code as app 7, opened from the Photos icon: lists key events (`scripts/build_app.py` compiles it) |
+| launcher | our own code as app 7, opened from the Photos icon: runs `APP0.BIN`..`APP9.BIN` from the drive (apps in `apps/`) |
 | demo-mode | Sony's hidden store-demo mode on 15 presses of OPTION/PWR (one code patch; HOLD on, home screen) |
 | no-fm | FM Radio dropped from the home menu |
 | no-fm-settings | FM Radio Settings dropped from the Settings menu |

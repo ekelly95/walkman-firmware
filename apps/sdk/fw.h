@@ -1,5 +1,5 @@
-/* Sony NW-E390 firmware 1.01 entry points, for apps that run in an overlay slot.
- * Addresses are section 0 (always resident) run addresses; +1 because they are Thumb code.
+/* Sony NW-E390 firmware 1.01 entry points, for the launcher (an app slot) and the .BIN apps it
+ * loads. Addresses are section 0 (always resident) run addresses, called with the Thumb bit set.
  * Evidence for each is in NOTES.md. */
 #ifndef FW_H
 #define FW_H
@@ -46,6 +46,13 @@ enum { EV_PRESS = 1, EV_LONG = 2, EV_REPEAT = 3, EV_RELEASE = 4, EV_LONG_RELEASE
 /* Text in the 12 px font, color from text_color. rect = {x0, y0, x1, y1}; align 0 left,
  * 1 right, 2 center. str is UTF-16, zero-terminated. */
 #define draw_text       FW(0x3061774, void (*)(const u16 *rect, const u16 *rect2, const u16 *str, int align))
+
+/* Files on the player's drive. dir is a path such as "\\"; name is the 8.3 short name without
+ * the dot, space padded to 11 characters ("APP1    BIN"); mode "R" or "W". Up to 8 open files. */
+#define file_open       FW(0x3057fda, int (*)(const char *dir, const char *name83, const char *mode))
+#define file_read       FW(0x305824a, unsigned (*)(void *buf, unsigned len, int handle))  /* bytes read */
+#define file_size       FW(0x305867e, unsigned (*)(int handle))
+#define file_close      FW(0x30581c8, void (*)(int handle))
 
 struct text_color { u16 fg, bg, flags; };   /* flags bit 0: transparent background, bit 1: swap */
 #define text_color      ((volatile struct text_color *)0x551c)

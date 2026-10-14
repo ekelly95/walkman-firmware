@@ -252,7 +252,7 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
   table at `0x100` is **`0x10` x5, `0x2` x5, `0x20` x5** (then 0): Sony's sequence, with HOLD on, on
   the home screen. Key codes (`0x306024a`): the ADC ladder gives `0x80` (<0xa4), `0x40`, `0x20`,
   `0x10`, `0x8`, `0x4` (to 0x3d7); `0x1` (OPTION/PWR, verified) and `0x2` are the two non-ADC
-  keys. **Buttons (read on the player with `mods/hello-app`, 2026-10-13):** OPTION/PWR `0x1`,
+  keys. **Buttons (read on the player with our key-test app, 2026-10-13):** OPTION/PWR `0x1`,
   play/pause `0x2`, ◀◀ `0x10`, ▶▶ `0x20`, + `0x40`, BACK/HOME `0x80`, − `0x100` (not from the ADC
   ladder; the key poll special-cases `0x100` next to the HOLD codes). ADC `0x4` and `0x8` are unused.
   So Sony's demo sequence is **◀◀ x5, play/pause x5, ▶▶ x5** (HOLD on, home screen). Events seen:
@@ -288,7 +288,7 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
   their descriptors are 0, and no code switches to index 6 or 7. Launching one would call through a
   null descriptor. Browser (28) is the folder browser and in normal use.
 
-## Our own app in slot 7 (2026-10-13, works: `mods/hello-app`)
+## Our own app in slot 7 (2026-10-13, works: first a hello app, now `mods/launcher`)
 
 - `scripts/build_app.py` compiles `app.c` with arm-none-eabi-gcc (WSL) for `-mcpu=cortex-m3
   -mthumb`, code linked at `0x306c4a4`, data at `0x3023010` starting with the 7-word descriptor
@@ -306,6 +306,25 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
   "Connected USB" from inside the app (the core handles USB and power-off, not the app).
 - `verify.os_changes` also counts the free space after the last blob, so `flash` needs
   `--allow-code-patches` for an image with app code.
+
+## The launcher and .BIN apps (2026-10-13, works on the player as 1.29)
+
+- `mods/launcher` (slot 7) lists `\APP0.BIN`..`\APP9.BIN` and runs one: `file_open("\\",
+  "APPn    BIN", "R")` (section 0 `0x3057fda`: 8 handle slots, resolves the folder with
+  `0x3057a60`, finds the 8.3 entry with `0x3057842`, refuses folders, mode with `W` opens for
+  writing), `file_size` `0x305867e`, `file_read(buf, len, h)` `0x305824a` (through a 512-byte
+  stack buffer, any destination), `file_close` `0x30581c8`. These are general FAT calls, not
+  installer-only: section 0 itself uses the same family at boot to write DevLogo.fil and friends.
+- Apps load at `0x306d000`, up to `0x4e00` bytes (`apps/sdk/nwapp.h`): the app overlay region runs
+  from `0x306c4a4` to `0x3071e64` (end of section 24, the largest app); section 14 starts there.
+  While an app is in front, nothing else loads into that region: section 0's own overlay loads are
+  section 8 at boot (`0x30612f6`) and the audio code's sections 142-145 at `0x1000000` (called
+  from section 35 via `0x3067f30`). Sub-overlays in the region (19, 21-23, 12, 30, 39-41) are
+  loaded by the apps that use them.
+- The core has hardware divide (155 `udiv`/`sdiv` in section 0), so `-mcpu=cortex-m3` code works.
+- The folder browser (section 28) lists files with a cluster-based API instead: `0x30594d4(dir
+  cluster, type)` counts files, `0x305888c` counts folders, `0x3059628(dir, index, ?, buf)` gets a
+  name. Not used yet; a real directory listing would start there.
 
 ## Brick insurance (2026-10-12)
 

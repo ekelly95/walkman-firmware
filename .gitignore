@@ -25,4 +25,5 @@ mods/*/fonts/
 
 # App builds (scripts/build_app.py)
 mods/*/build/
-mods/hello-app/patches.tsv
+mods/launcher/patches.tsv
+apps/*/build/

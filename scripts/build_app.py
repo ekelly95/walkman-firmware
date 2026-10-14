@@ -1,8 +1,13 @@
-"""Compile an app folder (app.c, app.ld, fw.h) and write its patches.tsv for `nwe39x build`.
+"""Compile an app: the launcher into an app slot (a patches.tsv for `nwe39x build`), or a .BIN app
+for the launcher to load from the player's drive.
 
-    uv run python -I scripts/build_app.py mods/hello-app [--slot 7] [--image RKNANOFW.IMG]
+    uv run python -I scripts/build_app.py mods/launcher [--slot 7] [--image RKNANOFW.IMG]
+    uv run python -I scripts/build_app.py --bin apps/keytest          # -> apps/keytest/build/KEYTEST.BIN
 
-The compiler is arm-none-eabi-gcc, run directly if it is on PATH, else through WSL. The app becomes
+Every .c file in the folder is compiled with the SDK in apps/sdk (fw.h, nwapp.h, ui.c, rt.c).
+The compiler is arm-none-eabi-gcc, run directly if it is on PATH, else through WSL.
+
+Slot mode: the folder has a slot.ld. The app becomes
 the code and data of an empty stage 3 section (Sony left sections 26 and 27, the Record and Ebook
 apps, empty), placed in the free space after the last blob; the patches set that section's header,
 the app's descriptor pointer in the app table, and point the home menu's Photos icon at it. Every
@@ -12,6 +17,7 @@ patch carries the stock bytes it replaces, so `build`, `diff` and `flash` check 
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import struct
 import subprocess
@@ -25,6 +31,8 @@ APP_SECTIONS = {6: 26, 7: 27}       # app index -> its (empty) stage 3 section
 APP_TABLE = 0x3090a34                # section 2 data: descriptor pointer per app index
 CODE_PA, DATA_PA = 0x306C4A4, 0x3023010
 PLACE = 0xC94200                     # file offset for app code: after the last blob (0xc9411e)
+SDK = Path(__file__).resolve().parent.parent / "apps" / "sdk"
+NWAPP_LOAD, NWAPP_MAX, NWAPP_MAGIC = 0x306D000, 0x4E00, 0x5041574E
 CFLAGS = ["-mcpu=cortex-m3", "-mthumb", "-Os", "-ffreestanding", "-nostdlib", "-fno-builtin",
           "-fno-zero-initialized-in-bss", "-fno-common", "-ffunction-sections", "-Wall", "-Wextra"]
 
@@ -36,13 +44,33 @@ def run(cmd: list[str], cwd: Path):
         subprocess.run(["wsl.exe", "--cd", str(cwd.resolve()), "-e", *cmd], check=True)
 
 
-def compile_app(src: Path) -> tuple[bytes, bytes]:
+def compile_app(src: Path, ld: Path, sections: list[str]) -> list[bytes]:
+    """Compile src/*.c with the SDK, link with `ld`, return the raw bytes of each output section."""
     out = src / "build"
     out.mkdir(exist_ok=True)
-    run(["arm-none-eabi-gcc", *CFLAGS, "-T", "app.ld", "-Wl,--gc-sections", "-o", "build/app.elf", "app.c"], src)
-    run(["arm-none-eabi-objcopy", "-O", "binary", "-j", ".text", "build/app.elf", "build/text.bin"], src)
-    run(["arm-none-eabi-objcopy", "-O", "binary", "-j", ".data", "build/app.elf", "build/data.bin"], src)
-    return (out / "text.bin").read_bytes(), (out / "data.bin").read_bytes()
+    rel = lambda p: os.path.relpath(p, src).replace("\\", "/")  # noqa: E731
+    sources = sorted(f.name for f in src.glob("*.c")) + [rel(SDK / "ui.c"), rel(SDK / "rt.c")]
+    run(["arm-none-eabi-gcc", *CFLAGS, f"-I{rel(SDK)}", "-T", rel(ld), "-Wl,--gc-sections",
+         "-o", "build/app.elf", *sources], src)
+    blobs = []
+    for s in sections:
+        run(["arm-none-eabi-objcopy", "-O", "binary", "-j", s, "build/app.elf", f"build/{s[1:]}.bin"], src)
+        blobs.append((out / f"{s[1:]}.bin").read_bytes())
+    return blobs
+
+
+def build_bin(src: Path):
+    (image,) = compile_app(src, SDK / "app.ld", [".bin"])
+    magic, abi, load, end = struct.unpack_from("<4I", image)
+    if magic != NWAPP_MAGIC or load != NWAPP_LOAD:
+        sys.exit("no NWAPP(...) header at the start of the image")
+    if end - load > NWAPP_MAX:
+        sys.exit(f"app needs {end - load} bytes; the limit is {NWAPP_MAX}")
+    name = image[16:32].split(bytes(1))[0].decode("ascii", "replace")
+    dest = src / "build" / f"{src.name.upper()[:8]}.BIN"
+    dest.write_bytes(image)
+    print(f"{dest}: \"{name}\", {len(image)} bytes ({end - load} with bss) of {NWAPP_MAX}. "
+          f"Copy it to the player's top folder as APP0.BIN .. APP9.BIN.")
 
 
 def hexline(section: str, addr: int, old: bytes, new: bytes, note: str) -> str:
@@ -52,9 +80,12 @@ def hexline(section: str, addr: int, old: bytes, new: bytes, note: str) -> str:
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("app", type=Path)
+    ap.add_argument("--bin", action="store_true", help="a .BIN app for the launcher")
     ap.add_argument("--slot", type=int, default=7, choices=sorted(APP_SECTIONS))
     ap.add_argument("--image", type=Path, default=Path("extract/cab/Data/Device/RKNANOFW.IMG"))
     args = ap.parse_args()
+    if args.bin:
+        return build_bin(args.app)
 
     fw = Firmware.load(args.image)
     stage = fw.blob("stage", 3)
@@ -65,7 +96,9 @@ def main():
     if PLACE < fw.blobs_end:
         sys.exit(f"free space starts at {fw.blobs_end:#x}, after {PLACE:#x}")
 
-    text, data = compile_app(args.app)
+    text, data = compile_app(args.app, args.app / "slot.ld", [".text", ".data"])
+    if CODE_PA + len(text) > NWAPP_LOAD:
+        sys.exit(f"slot code ends at {CODE_PA + len(text):#x}, past {NWAPP_LOAD:#x} where .BIN apps load")
     if len(data) < 28:
         sys.exit("no app descriptor at the start of .data")
     code_at = PLACE
@@ -76,7 +109,7 @@ def main():
     if any(fw.buf[PLACE:end]):
         sys.exit("the free space is not empty in this image")
 
-    lines = [f"# Generated by scripts/build_app.py from {args.app.name}/app.c: do not edit.",
+    lines = [f"# Generated by scripts/build_app.py from {args.app.name}: do not edit.",
              f"# {len(text)} bytes of code at {CODE_PA:#x}, {len(data)} of data at {DATA_PA:#x}, as section {sec} "
              f"(app {args.slot}).",
              "# section\trun address\told\tnew\tnote"]
