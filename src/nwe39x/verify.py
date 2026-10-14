@@ -105,15 +105,17 @@ VERSION_REGIONS = {"firmware version (XML)", "header version", "backup header ve
 
 
 def os_changes(stock: Firmware, built: Firmware) -> list[int]:
-    """Offsets of changed bytes inside stage 3, the OS itself, other than its version string.
+    """Offsets of changed bytes inside stage 3, the OS itself, other than its version string, and in
+    the free space between the last blob and `size`, where app sections put their code.
     Pictures, fonts, strings and the GBK font are separate blobs; byte patches are what land here."""
     stage = stock.blob("stage", 3)
     m = updater.VERSION_RE.search(bytes(stock.buf))
     a, b, out = stock.buf, built.buf, []
-    for start in range(stage.offset, stage.end, 0x1000):  # compare in pages, look closer only where they differ
-        end = min(start + 0x1000, stage.end)
-        if a[start:end] != b[start:end]:
-            out += [i for i in range(start, end) if a[i] != b[i] and not m.start(1) <= i < m.end(1)]
+    for lo, hi in ((stage.offset, stage.end), (stock.blobs_end, stock.size_field)):
+        for start in range(lo, hi, 0x1000):  # compare in pages, look closer only where they differ
+            end = min(start + 0x1000, hi)
+            if a[start:end] != b[start:end]:
+                out += [i for i in range(start, end) if a[i] != b[i] and not m.start(1) <= i < m.end(1)]
     return out
 
 

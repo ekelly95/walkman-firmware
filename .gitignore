@@ -22,3 +22,7 @@ __pycache__/
 # Personal photos stay out of git for now
 mods/*/images/
 mods/*/fonts/
+
+# App builds (scripts/build_app.py)
+mods/*/build/
+mods/hello-app/patches.tsv

@@ -252,7 +252,11 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
   table at `0x100` is **`0x10` x5, `0x2` x5, `0x20` x5** (then 0): Sony's sequence, with HOLD on, on
   the home screen. Key codes (`0x306024a`): the ADC ladder gives `0x80` (<0xa4), `0x40`, `0x20`,
   `0x10`, `0x8`, `0x4` (to 0x3d7); `0x1` (OPTION/PWR, verified) and `0x2` are the two non-ADC
-  keys. Which buttons `0x2`, `0x10` and `0x20` are is not known yet. `mods/demo-mode` turns `cmp r2, r1` at `0x306043c` into `cmp r1, #1` (`8a42` ->
+  keys. **Buttons (read on the player with `mods/hello-app`, 2026-10-13):** OPTION/PWR `0x1`,
+  play/pause `0x2`, ◀◀ `0x10`, ▶▶ `0x20`, + `0x40`, BACK/HOME `0x80`, − `0x100` (not from the ADC
+  ladder; the key poll special-cases `0x100` next to the HOLD codes). ADC `0x4` and `0x8` are unused.
+  So Sony's demo sequence is **◀◀ x5, play/pause x5, ▶▶ x5** (HOLD on, home screen). Events seen:
+  press `0x1…` on the way down, release `0x4…` on the way up. `mods/demo-mode` turns `cmp r2, r1` at `0x306043c` into `cmp r1, #1` (`8a42` ->
   `0129`): 15 presses of key 1 toggle it. Enter/exit go through the debug print `0x3068888`,
   so a serial port, if there is one, should log them.
 - Other hidden strings: "Shutdown because power on with hold key!!!", "Long press back key: Back
@@ -283,6 +287,25 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
 - **Record and Ebook are compiled out**: sections 26 and 27 have zero bytes of code, data and bss,
   their descriptors are 0, and no code switches to index 6 or 7. Launching one would call through a
   null descriptor. Browser (28) is the folder browser and in normal use.
+
+## Our own app in slot 7 (2026-10-13, works: `mods/hello-app`)
+
+- `scripts/build_app.py` compiles `app.c` with arm-none-eabi-gcc (WSL) for `-mcpu=cortex-m3
+  -mthumb`, code linked at `0x306c4a4`, data at `0x3023010` starting with the 7-word descriptor
+  `{0, 0, event, keys, draw, start(msg), stop}` (dispatcher `0x3066a08`: a nonzero return from
+  `event`/`keys` switches app; `draw` runs each pass while `0x305458e()` is true).
+- Code and data go in the free space after the last blob (file `0xc94200`; blobs end at
+  `0xc9411e`, `size` is `0xc98000`). Section 27's header points there: the overlay loader
+  `0x3066eda` copies from `stage + (va - base)` in 512-byte NAND reads with no bounds check, and
+  zeroes bss. Data is reloaded every time the app opens.
+- The app table entry for app 7 (section 2 data `0x3090a50`) gets the descriptor address; home's
+  Photos handler (section 17) skips its photo-count check (`0x306c5a2`) and switches to app 7
+  (`0x306c5ac`).
+- Verified on the player (1.27, 1.28): text and pictures draw, key events arrive through
+  `0x306067c`, short OPTION/PWR returns home via `app_switch(0, msg)`, and USB still switches to
+  "Connected USB" from inside the app (the core handles USB and power-off, not the app).
+- `verify.os_changes` also counts the free space after the last blob, so `flash` needs
+  `--allow-code-patches` for an image with app code.
 
 ## Brick insurance (2026-10-12)
 

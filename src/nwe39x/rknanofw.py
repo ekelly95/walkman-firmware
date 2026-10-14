@@ -122,6 +122,12 @@ class Firmware:
         except (KeyError, IndexError):
             raise FirmwareError(f"no {table}{index} in this image") from None
 
+    @property
+    def blobs_end(self) -> int:
+        """End of the last blob. From here to `size` the image is free (zeros in Sony's 1.01):
+        app sections place their code and data there."""
+        return max(b.end for bs in self.blobs.values() for b in bs if b.size)
+
     def read(self, blob: Blob, descramble: bool = True) -> bytes:
         """Blob contents; stages 0-2 are RC4-scrambled as one stream (stage 3 is plain)."""
         data = bytes(self.buf[blob.offset:blob.end])
