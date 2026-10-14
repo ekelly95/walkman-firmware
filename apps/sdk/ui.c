@@ -12,13 +12,11 @@ void ui_fill(int x0, int y0, int x1, int y1, u16 color)
         lcd_pixel(color);
 }
 
-static u32 ticks, seed;
+static u32 seed;
 
 u32 ui_ticks(void)
 {
-    if (SYST_CSR & (1u << 16))
-        ticks++;
-    return ticks;
+    return TICKS;
 }
 
 u32 ui_random(void)

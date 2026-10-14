@@ -1,2 +1,4 @@
 * text=auto eol=lf
 *.png binary
+# Sample book: keep its Windows line endings (the reader test covers CRLF)
+apps/reader/sample/*.TXT -text

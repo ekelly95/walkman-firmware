@@ -27,8 +27,6 @@ static void check_table(void)
     for (u32 i = 0; i < TABLE_WORDS; i++) {
         if (((volatile const u32 *)table)[i] != PATTERN)
             table_bad++;
-        if (!(i & 1023))
-            ui_ticks();             /* keep the tick count exact through the long loop */
     }
     t_table = ui_ticks() - t0;
 }
@@ -39,16 +37,12 @@ static void check_heap(void)
     u32 words = NWAPP_HEAP_SIZE / 4, x = 0x12345678, t0 = ui_ticks();
     for (u32 i = 0; i < words; i++) {
         heap[i] = x = next(x);
-        if (!(i & 1023))
-            ui_ticks();
     }
     x = 0x12345678;
     heap_bad = 0;
     for (u32 i = 0; i < words; i++) {
         if (heap[i] != (x = next(x)))
             heap_bad++;
-        if (!(i & 1023))
-            ui_ticks();
     }
     t_heap = ui_ticks() - t0;
 }

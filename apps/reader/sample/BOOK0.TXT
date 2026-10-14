@@ -1,0 +1,24 @@
+A Walkman That Reads
+
+This is a sample book for the reader app. Copy it to the top folder of the player's drive as BOOK0.TXT, open Photos, run Reader, and press the center of the pad.
+
+Down or the skip-forward button turns the page; up or skip-back goes back. BACK returns to the list of books, and OPTION goes back to the launcher.
+
+The reader loads the whole file into memory, up to 164 KiB, which is about a hundred pages of a paperback. Longer books are cut at that point and the header says so.
+
+Lines wrap at spaces using the width of each character in the player's own font, so a narrow letter like i takes less room than a wide one like M. A word longer than a line, such as https://example.com/a/very/long/address/that/cannot/possibly/fit/on/one/line, is broken wherever the line ends.
+
+Text is read as UTF-8, so other alphabets work as far as the font goes:
+
+Français : « Où est la bibliothèque ? » Ça dépend.
+Deutsch: Größe, Übermaß, Fußgängerübergänge.
+Español: ¿Dónde está el niño? ¡Allí!
+Русский: Съешь же ещё этих мягких французских булок.
+Ελληνικά: Ξεσκεπάζω την ψυχοφθόρα βδελυγμία.
+日本語：吾輩は猫である。名前はまだ無い。
+中文：学而时习之，不亦说乎？
+한국어: 다람쥐 헌 쳇바퀴에 타고파.
+
+Bytes that are not valid UTF-8 are shown as Latin-1, so older text files mostly work too.
+
+The end of the sample. Good reading.

@@ -17,9 +17,7 @@ void ui_hex32(char out[11], u32 v);                      /* "0x" + 8 hex digits 
 void ui_dec(char out[11], u32 v);                        /* decimal, no leading zeros */
 
 void ui_fill(int x0, int y0, int x1, int y1, u16 color);  /* inclusive rectangle */
-/* 10 ms ticks since the app started, counted by polling SysTick. Call it at least every 10 ms to
- * keep it exact (draw() runs far more often); a slower caller loses whole ticks, never gains. */
-u32 ui_ticks(void);
+u32 ui_ticks(void);                                      /* the firmware's 10 ms tick counter */
 u32 ui_random(void);                                     /* xorshift, seeded from SysTick */
 
 #endif

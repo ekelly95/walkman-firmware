@@ -71,11 +71,16 @@ enum { EV_PRESS = 1, EV_LONG = 2, EV_REPEAT = 3, EV_RELEASE = 4, EV_LONG_RELEASE
 #define lcd_window      FW(0x3062774, void (*)(int x0, int y0, int x1, int y1))
 #define lcd_pixel       FW(0x30626cc, void (*)(u16 color))
 
-/* SysTick runs the firmware's 10 ms tick. COUNTFLAG (bit 16 of CSR) is set on every wrap and
- * cleared by reading CSR; the firmware never reads it, so apps can count ticks with it (ui_ticks).
- * CVR counts down within the current tick: a cheap source of entropy. */
-#define SYST_CSR        (*(volatile u32 *)0xE000E010)
+/* The firmware's 10 ms tick counter (SysTick interrupt), the "now" of the screen timeout and the
+ * key handler. SysTick's CVR counts down within the current tick: a cheap source of entropy. */
+#define TICKS           (*(volatile u32 *)0x4b68)
 #define SYST_CVR        (*(volatile u32 *)0xE000E018)
+
+/* 12 px font lookups, as draw_text uses them (each reads the font from flash: cache results).
+ * font12_glyph(cp - 0x20) for U+0020..U+20F6 gives the glyph number (0xffff: none);
+ * font12_width(glyph) its advance in pixels. Other code points draw 12 px wide (U+FF61..U+FF9F 6). */
+#define font12_glyph    FW(0x3053f40, u16 (*)(int index))
+#define font12_width    FW(0x3053f20, u8 (*)(int glyph))
 
 /* Background tasks (music playback, the status bar, ...) are a linked list headed at RAM 0x77ac
  * that the dispatcher runs every pass. A task has the app descriptor's shape: links, then five

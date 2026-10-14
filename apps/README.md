@@ -13,6 +13,7 @@ uv run python -I scripts/build_app.py --bin apps/keytest    # -> apps/keytest/bu
 | keytest | the last 8 key events as hex: which button sends which code |
 | snake | Snake: the pad steers, center pauses; holds the screen on while playing |
 | bigtest | a big app: checks a 96 KiB table in its own image and the 164 KiB heap |
+| reader | a big app: reads `BOOK0.TXT`..`BOOK9.TXT` (UTF-8, up to 164 KiB) with word wrap by the font's own widths; `sample/BOOK0.TXT` tries it out, `scripts/reader_test.py` tests the layout on the PC |
 
 ## Writing one
 
@@ -47,7 +48,8 @@ NWAPP("Hello", start, key, draw, stop);
 - The screen times out as in Sony's menus (the launcher restarts the timeout on each key press),
   and while it is off `draw()` is not called at all. An app that moves on its own, like a game,
   calls `screen_hold()` while it runs and `screen_release()` when it stops (also in `stop()`).
-- `ui_ticks()` counts 10 ms ticks from the firmware's SysTick; `ui_random()` gives random numbers.
+- `ui_ticks()` is the firmware's own 10 ms tick counter (it keeps counting while the screen is off);
+  `ui_random()` gives random numbers; `font12_glyph`/`font12_width` (`fw.h`) measure text.
 - A small app (`NWAPP(...)`) gets 0x4e00 bytes (19.5 KiB) at `0x306d000` for code, data and bss,
   and music keeps playing. A **big app** (`NWAPP_BIG(...)`) gets 0x22000 bytes (136 KiB) there plus
   `NWAPP_HEAP`, 0x29000 bytes (164 KiB); the launcher stops music first, because big apps use the

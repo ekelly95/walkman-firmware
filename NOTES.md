@@ -386,6 +386,17 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
   `0x3067ee4`); presumably music's task normally paints over it. Stopping all tasks (1.31) and only
   the overlay ones (1.32) both show it. Not chased further.
 
+## Tick counter and text width, for apps (2026-10-13)
+
+- RAM `0x4b68` is the firmware's 10 ms tick counter, kept by the SysTick interrupt: the screen
+  timeout and the volume key handler read it as "now", and `0x305506c` snapshots it with SysTick's
+  CVR to time short intervals. `apps/sdk` reads it directly (`ui_ticks`). The first SDK version
+  counted SysTick wraps by polling COUNTFLAG, which loses time whenever nobody polls (screen off).
+- The 12 px font's Latin part can be measured with the firmware's own readers: `0x3053f40(cp -
+  0x20)` gives the glyph number for U+0020..U+20F6 (`0xffff`: none, drawn from the CJK part),
+  `0x3053f20(glyph)` the advance width (the width table at font + `0x69ae`). Each reads flash, so
+  `apps/reader` caches them per code point. CJK glyphs advance 12 (half-width katakana 6).
+
 ## Brick insurance (2026-10-12)
 
 - **What the installer checks** (section 9, `work/ghidra/out/install_routine.c`): magic, file size
