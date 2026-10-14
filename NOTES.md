@@ -245,12 +245,44 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
   Charge, MDB, M3UBRO, M3UWIN, PICBRO, PhotoMenu; set at `0x3066b6c`). So: home screen, HOLD on.
   The routine runs from the key poll at `0x306062e` when byte `[0x55a4]` is set.
   **Verified on the player (1.26, 2026-10-13)**: home screen, HOLD on, 15 taps of OPTION/PWR
-  enters demo mode ("DEMO" shown); repeating it leaves. This confirms key 1 = OPTION/PWR. `mods/demo-mode` turns `cmp r2, r1` at `0x306043c` into `cmp r1, #1` (`8a42` ->
+  enters demo mode ("DEMO" shown); repeating it leaves. This confirms key 1 = OPTION/PWR.
+- **Correction (2026-10-13): low RAM is section 2's data.** Section 2's data runs at `0x3090000`
+  (0x4b0a bytes, bss to `0x3097e4c`) and the code addresses it through a mirror at `0x0`, so RAM
+  `0x100`, `0xa30` and the like *are* in the image (stage 3 section 2 data + offset). The demo key
+  table at `0x100` is **`0x10` x5, `0x2` x5, `0x20` x5** (then 0): Sony's sequence, with HOLD on, on
+  the home screen. Key codes (`0x306024a`): the ADC ladder gives `0x80` (<0xa4), `0x40`, `0x20`,
+  `0x10`, `0x8`, `0x4` (to 0x3d7); `0x1` (OPTION/PWR, verified) and `0x2` are the two non-ADC
+  keys. Which buttons `0x2`, `0x10` and `0x20` are is not known yet. `mods/demo-mode` turns `cmp r2, r1` at `0x306043c` into `cmp r1, #1` (`8a42` ->
   `0129`): 15 presses of key 1 toggle it. Enter/exit go through the debug print `0x3068888`,
   so a serial port, if there is one, should log them.
 - Other hidden strings: "Shutdown because power on with hold key!!!", "Long press back key: Back
   to home screen", "Long press power key: Shutdown", the "Os idle Wakeup by X key" set. Nothing
   that names a test, factory, aging or service screen, in the code or in the UI strings.
+
+## Apps and the overlay loader (2026-10-13)
+
+- The current app index is the byte at RAM `0xa30` (section 2 data `+0xa30`); `0x3066b6c(idx, msg)`
+  switches app (called from about 150 places), `0x3066b3a` loads it: `0x3066eda(section, 7)` reads
+  that stage 3 section's 32-byte header from NAND and loads its code, data and bss, then the app's
+  descriptor is called through `+0x14` (start) and `+0x10` (stop).
+- Per-app tables in section 2 data: names via `0x3066ad8`, descriptors at `0xa34`, overlay section
+  at `0xa78`:
+
+  | idx | name | section | | idx | name | section |
+  |---|---|---|---|---|---|---|
+  | 0 | MainMenu | 17 | | 9 | Systemset | 34 |
+  | 1 | MediaLib | 18 | | 10 | USB | 10 |
+  | 2 | MediaBro | 20 | | 11 | Charge | 7 |
+  | 3 | Music | 24 | | 12 | MDB | 6 |
+  | 4 | Radio | 25 | | 13 | M3UBRO | 29 |
+  | 5 | Picture | 13 | | 14 | M3UWIN | 31 |
+  | 6 | Record | 26 | | 15 | PICBRO | 32 |
+  | 7 | Ebook | 27 | | 16 | PhotoMenu | 33 |
+  | 8 | Browser | 28 | | | | |
+
+- **Record and Ebook are compiled out**: sections 26 and 27 have zero bytes of code, data and bss,
+  their descriptors are 0, and no code switches to index 6 or 7. Launching one would call through a
+  null descriptor. Browser (28) is the folder browser and in normal use.
 
 ## Brick insurance (2026-10-12)
 

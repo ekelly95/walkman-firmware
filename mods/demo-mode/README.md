@@ -1,9 +1,9 @@
 # demo-mode
 
 Sony's firmware has a store-demo mode ("Enter Demo mode" / "Exit Demo mode" in its debug log),
-toggled by a secret sequence of 15 key presses. The sequence itself is a table in SRAM at `0x100`
-that nothing in `RKNANOFW.IMG` fills, so its keys are unknown. This mod replaces the table lookup
-with a fixed key: **press key 1 fifteen times in a row** to enter demo mode, and fifteen more to
+toggled by a secret sequence of 15 key presses: the table at RAM `0x100` (section 2 data) holds
+key codes `0x10` x5, `0x2` x5, `0x20` x5, but which buttons those are is not known yet. This mod
+replaces the table lookup with a fixed key: **press key 1 fifteen times in a row** to enter demo mode, and fifteen more to
 leave. Any other key resets the count.
 
 **Slide HOLD on and go to the home screen first**: presses only count while HOLD is on and the

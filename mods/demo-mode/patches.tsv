@@ -1,5 +1,5 @@
 # Demo mode on a known key sequence: 15 presses in a row of key 1 (OPTION/PWR, by its 2 s long-press
 # shutdown) toggle the store-demo flag at settings +0x353. Stock compares each press with a 15-entry
-# key table at SRAM 0x100 that is filled from outside the image. See NOTES.md, "Hidden modes".
+# key table at RAM 0x100 (section 2 data: 0x10 x5, 0x2 x5, 0x20 x5). See NOTES.md, "Hidden modes".
 # section	run address	old	new	note
 0	306043c	8a42	0129	demo-mode sequence: compare with key 1 instead of table[counter] (cmp r2,r1 -> cmp r1,1)
