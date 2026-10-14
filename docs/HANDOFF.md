@@ -98,7 +98,8 @@ changes unless `--allow-code-patches`.
    Settings since 1.13).
 2. **Volume follow-up on the device**: does anything still pull the volume down after a long
    session or a headphone replug? If yes, enable the commented section 34 line in
-   `mods/volume-limit/patches.tsv`. Also: what writes settings `+0x4a`.
+   `mods/volume-limit/patches.tsv`. (`+0x4a` is answered: only the boot settings loader,
+   section 1 `0x306d176`, copies it from the stored settings sector; see NOTES "Settings sector".)
 3. **Fonts**: done. `fonts from-ttf --advance N`; `fonts from-bdf` (Terminus BDF regular imports
    pixel-identical to the TTF sheet on the player); font12's CJK part is mapped (`--font 12` /
    `12zh`, ranges kana/cjk/hangul/...; see NOTES). The player keeps Terminus regular, ink + 1.

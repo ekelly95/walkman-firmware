@@ -98,7 +98,8 @@ compares versions (`VERSION_EQUAL`, `VERSION_OLDER`, `VERSION_NEWER`, `VERSION_C
   1.05. So the tool's post-install check compares the package version with the header version.
 - Windows sees the player only as USB mass storage (`SONY WALKMAN 1.00` SCSI inquiry, never
   changes), so the tool's post-install version check must use the capability XML or a vendor
-  SCSI command. Find out in M5 (`WmFwUpdater.dll`, USB capture).
+  SCSI command. Answered: the vendor command `FC 00 20 "dbmn"` (REQUEST DEVINFO), which reports
+  the header version; see "Flashing without Sony's tool" below.
 
 ## font12 advance widths (2026-10-12, found while checking the font-test photos; in fonts.py since)
 
@@ -146,10 +147,9 @@ read-only pass the same evening found the right routine in section 35 but misrea
 was checked against the bytes.
 
 - **Settings block at SRAM `0x4b70`** (literal in 30+ sections). `+0x4e` is the master volume,
-  0-30. `+0x4a` is a byte that gates the limit: `0` means limited. Nothing in stage 3 writes it
-  with an immediate offset, so it probably arrives with the block from flash (a region or
-  destination byte?). Section 13 at `0x306c6d2` also uses it (values 0/1 vs 3 vs other) to pick a
-  date layout, so it is not a plain on/off AVLS flag. `+0x355` is a u16, the selected home
+  0-30. `+0x4a` is a byte that gates the limit: `0` means limited. Section 13 at `0x306c6d2` also
+  uses it (values 0/1 vs 3 vs other) to pick a date layout, so it is not a plain on/off AVLS
+  flag; a region/destination code fits. Where it comes from: see "Settings sector" below. `+0x355` is a u16, the selected home
   entry: read and written with `ldrh.w`/`strh.w [rX, #0x355]` off the block in 11 sections,
   including the home menu (section 17 `0x306c4aa`). `+0x353` (a byte) is the demo-mode flag.
 - **The cap is 17** (`0x11`), applied when `+0x4a == 0`:
@@ -164,6 +164,27 @@ was checked against the bytes.
     rollback when the counter expires; not traced further;
   - section 34 `0x306c7d8`: a handler (also reached via a pointer in section 6's data) that clamps
     volume > 18 to 17 regardless of the byte, then shows something via section 57.
+- **Settings sector (2026-10-13): the only writer of `+0x4a` is the boot-time settings loader.**
+  The earlier search looked for immediate-offset stores off a known `0x4b70`; the loader holds the
+  block in `sl`, so it was missed. Section 1 `0x306d176` (called from section 1 `0x306c746`):
+  - reads 1 KiB from storage with `0x30677d6(0, sp+8, 0x400)` (the read twin of the save
+    `0x3067848`) into a buffer in `r4`;
+  - checks a CRC-8 (`0x3067b36(ptr, nbits)`, table at `0x3004528`, init `0x0f`, length `0x1b08`
+    bits = 865 bytes) against the u32 at buffer `+0x361`, and the magic words `"SAVE"` at `+0`
+    and `"INFO"` at `+0x35d`;
+  - if either check fails, fills buffer `+0x4b..+0x3ff` with `0xff` but **keeps bytes
+    `0..0x4a`**, so `+0x4a` survives a settings reset (a factory-provisioned field, not a user
+    setting);
+  - copies fields into the live block (`sl = 0x4b70`); at `0x306d4b4`:
+    `ldrb r1, [r4, #0x4a]; strb r1, [sl, #0x4a]`, then `cmp r1, #5; movhi r1, #6; strbhi` -
+    values 0-5 are kept, anything above (including erased `0xff`) becomes 6.
+  - The save paths (section 0 `0x30678b0`, section 1 `0x306da0a`) recompute the CRC and write
+    the live block back with `0x3067848`, so the byte round-trips unchanged.
+  So the byte lives in the player's settings storage, not in `RKNANOFW.IMG`: no resource edit can
+  change it, and nothing in stage 3 sets it from the UI. The two code patches in
+  `mods/volume-limit` remain the way to lift the cap. Checked with a capstone scan of every
+  section for stores resolving to `0x4bba` (it finds the known `+0x355` writers), every
+  `strb/strh/str ... #0x4a]`, and every call with `r0 = 0x4b70`.
 - **Section 35 `0x307890e` is not the cap.** It runs only when EqMode == 5 and lowers the EQ's
   `max_DbGain` from 12 dB to 2 dB in steps as the volume rises (a harder ladder when the byte is
   0), i.e. headroom so a boosted EQ does not clip. Patching it out makes nothing louder.
