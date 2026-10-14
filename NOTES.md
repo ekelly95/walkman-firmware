@@ -233,8 +233,21 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
   flips. The table is in SRAM at `0x100`, which no section's data or bss covers, so its contents
   come from outside the image (boot loader parameters?). Entering (`0x30647ca`) sets volume 13,
   settings `+0x4f = 4`, `+0xa2/+0x9d/+0x9a = 1`, `+0xa7 = 6`, `+0x9c = 0`, then re-initializes
-  playback; exiting restores. A patch that NOPs the `bne` at `0x3060444` would make any 15
-  key presses toggle it, if anyone wants to see what it does.
+  playback; exiting restores. Correction (2026-10-13): NOPing the `bne` at `0x3060444` would not
+  work; the increment is under `itt eq`, so a mismatch would neither advance nor reset. The key
+  state is RAM `0x4b14` (written by section 0 `0x30602dc`): `+8` current key, `+0xc` previous,
+  `+0x10` ticks held (the press counts at 2), `+4` event (key | `0x1..` press, `0x2..` long at 50,
+  `0x3..` repeat, `0x4..`/`0x5..` release). Key 1 held 200 ticks raises event `0xc`, the long-press
+  shutdown, so key 1 is OPTION/PWR. Counting also needs `[0x4b3c] == 1`, **HOLD on** (`0x30601c4`
+  reads GPIO port 1 pin 7 via `0x3055aae(1, 7)` and reports `0x41000000` HOLD on / `0x42000000`
+  off as key codes), and byte `[0xa30] == 0`, the current app index (`0x3066ad8` names 0-16:
+  MainMenu, MediaLib, MediaBro, Music, Radio, Picture, Record, Ebook, Browser, Systemset, USB,
+  Charge, MDB, M3UBRO, M3UWIN, PICBRO, PhotoMenu; set at `0x3066b6c`). So: home screen, HOLD on.
+  The routine runs from the key poll at `0x306062e` when byte `[0x55a4]` is set.
+  **Verified on the player (1.26, 2026-10-13)**: home screen, HOLD on, 15 taps of OPTION/PWR
+  enters demo mode ("DEMO" shown); repeating it leaves. This confirms key 1 = OPTION/PWR. `mods/demo-mode` turns `cmp r2, r1` at `0x306043c` into `cmp r1, #1` (`8a42` ->
+  `0129`): 15 presses of key 1 toggle it. Enter/exit go through the debug print `0x3068888`,
+  so a serial port, if there is one, should log them.
 - Other hidden strings: "Shutdown because power on with hold key!!!", "Long press back key: Back
   to home screen", "Long press power key: Shutdown", the "Os idle Wakeup by X key" set. Nothing
   that names a test, factory, aging or service screen, in the code or in the UI strings.
