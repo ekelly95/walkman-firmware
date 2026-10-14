@@ -28,19 +28,32 @@ struct app {
 /* Current key event, 0 if none: key code | type << 28 (EV_* below). Each press gives a press,
  * then repeats if held past 50 ticks, then a release. 0x800 while HOLD is on. */
 #define key_event       FW(0x306067c, u32 (*)(void))
-/* Key codes, read with the hello-app on the player (2026-10-13). */
-#define KEY_OPTION 0x01
-#define KEY_PLAY   0x02
-#define KEY_PREV   0x10
-#define KEY_NEXT   0x20
-#define KEY_VOLUP  0x40
+/* Key codes, read with the key-test app on the player (2026-10-13). The pad's four arrows and
+ * center, plus the volume buttons; VOL+ is inferred from key_global's handling of 0x10000004. */
+#define KEY_OPTION  0x01
+#define KEY_PLAY    0x02    /* pad center */
+#define KEY_VOLUP   0x04
+#define KEY_DOWN    0x08    /* pad down */
+#define KEY_LEFT    0x10    /* pad left, |<< */
+#define KEY_RIGHT   0x20    /* pad right, >>| */
+#define KEY_UP      0x40    /* pad up */
+#define KEY_BACK    0x80
 #define KEY_VOLDOWN 0x100
-#define KEY_BACK   0x80
 #define KEY_HOLD   0x800
 #define EV_KEY(ev)  ((ev) & 0x0fffffff)
 #define EV_TYPE(ev) ((ev) >> 28)
 enum { EV_PRESS = 1, EV_LONG = 2, EV_REPEAT = 3, EV_RELEASE = 4, EV_LONG_RELEASE = 5 };
-#define keys_blocked    FW(0x3067cdc, int (*)(void))   /* home skips input while nonzero */
+/* The firmware's global key handling, as the home menu calls it with each event: + and - change
+ * the volume, HOLD shows its icon. Returns nonzero when it used the event. Apps that want + and -
+ * for themselves just don't call it. */
+#define key_global      FW(0x3067cdc, int (*)(u32 ev))
+
+/* Screen timeout (state at RAM 0x55a4: +0 screen off, +1 hold count, +4 last activity). While the
+ * screen is off the dispatcher stops calling draw(). screen_activity restarts the timeout, as a
+ * key press in a menu should; screen_hold keeps the screen on until a matching screen_release. */
+#define screen_activity FW(0x3062d8e, void (*)(void))
+#define screen_hold     FW(0x3062db6, void (*)(void))
+#define screen_release  FW(0x3062d9c, void (*)(void))
 /* Picture `idx` from imageres0 at (x, y). 105 is the 128x160 home backdrop. */
 #define draw_picture_at FW(0x3062400, void (*)(int idx, int x, int y))
 /* Text in the 12 px font, color from text_color. rect = {x0, y0, x1, y1}; align 0 left,
@@ -53,6 +66,16 @@ enum { EV_PRESS = 1, EV_LONG = 2, EV_REPEAT = 3, EV_RELEASE = 4, EV_LONG_RELEASE
 #define file_read       FW(0x305824a, unsigned (*)(void *buf, unsigned len, int handle))  /* bytes read */
 #define file_size       FW(0x305867e, unsigned (*)(int handle))
 #define file_close      FW(0x30581c8, void (*)(int handle))
+
+/* Direct LCD drawing: set an inclusive window, then write its pixels row by row (RGB565). */
+#define lcd_window      FW(0x3062774, void (*)(int x0, int y0, int x1, int y1))
+#define lcd_pixel       FW(0x30626cc, void (*)(u16 color))
+
+/* SysTick runs the firmware's 10 ms tick. COUNTFLAG (bit 16 of CSR) is set on every wrap and
+ * cleared by reading CSR; the firmware never reads it, so apps can count ticks with it (ui_ticks).
+ * CVR counts down within the current tick: a cheap source of entropy. */
+#define SYST_CSR        (*(volatile u32 *)0xE000E010)
+#define SYST_CVR        (*(volatile u32 *)0xE000E018)
 
 struct text_color { u16 fg, bg, flags; };   /* flags bit 0: transparent background, bit 1: swap */
 #define text_color      ((volatile struct text_color *)0x551c)

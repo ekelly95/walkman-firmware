@@ -252,10 +252,13 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
   table at `0x100` is **`0x10` x5, `0x2` x5, `0x20` x5** (then 0): Sony's sequence, with HOLD on, on
   the home screen. Key codes (`0x306024a`): the ADC ladder gives `0x80` (<0xa4), `0x40`, `0x20`,
   `0x10`, `0x8`, `0x4` (to 0x3d7); `0x1` (OPTION/PWR, verified) and `0x2` are the two non-ADC
-  keys. **Buttons (read on the player with our key-test app, 2026-10-13):** OPTION/PWR `0x1`,
-  play/pause `0x2`, ◀◀ `0x10`, ▶▶ `0x20`, + `0x40`, BACK/HOME `0x80`, − `0x100` (not from the ADC
-  ladder; the key poll special-cases `0x100` next to the HOLD codes). ADC `0x4` and `0x8` are unused.
-  So Sony's demo sequence is **◀◀ x5, play/pause x5, ▶▶ x5** (HOLD on, home screen). Events seen:
+  keys. **Buttons (read on the player with our key-test app, 2026-10-13):** the four-way pad is
+  ▲ `0x40`, ▼ `0x8`, ◀◀ `0x10`, ▶▶ `0x20`, center (▶II) `0x2`; BACK/HOME `0x80`,
+  OPTION/PWR `0x1`; volume − `0x100` (not from the ADC ladder: the key poll passes `0x100` through
+  next to the HOLD codes). Volume + is `0x4` by the firmware's own volume handler (`0x3067cdc` turns
+  `0x10000004` into flag `0x12`, volume up, and `0x10000100` into `0x13`); not yet pressed on the
+  player. (A first reading took the volume − button for the pad's ▼.)
+  So Sony's demo sequence is **◀◀ x5, center x5, ▶▶ x5** (HOLD on, home screen). Events seen:
   press `0x1…` on the way down, release `0x4…` on the way up. `mods/demo-mode` turns `cmp r2, r1` at `0x306043c` into `cmp r1, #1` (`8a42` ->
   `0129`): 15 presses of key 1 toggle it. Enter/exit go through the debug print `0x3068888`,
   so a serial port, if there is one, should log them.
@@ -325,6 +328,26 @@ Gemini's note that `FC 20` is the reboot command was wrong: `FC 20` is DEVINFO, 
 - The folder browser (section 28) lists files with a cluster-based API instead: `0x30594d4(dir
   cluster, type)` counts files, `0x305888c` counts folders, `0x3059628(dir, index, ?, buf)` gets a
   name. Not used yet; a real directory listing would start there.
+
+## Timing and the screen timeout (2026-10-13, for apps)
+
+- The system tick is the Cortex-M SysTick at 10 ms (`0x3060160(10)` writes LOAD at `0xE000E014`;
+  "System tick initial... period: 10ms"). Handlers are installed at runtime: both vector tables
+  (section 0 code and RAM `0x0` in section 2 data) hold only default handlers. Soft timers are
+  records in section 2 data such as RAM `0x140` `{0, period 1, 0, callback, next}` (the key poll
+  `0x306062e`). Nothing in the firmware reads SysTick's COUNTFLAG, so `apps/sdk` counts ticks by
+  polling it.
+- The screen timeout lives at RAM `0x55a4`: `+0` screen off, `+1` hold count, `+4` last activity.
+  `0x3062dc0` (every dispatcher pass) turns the backlight off once the timeout from settings
+  `+0x50` passes, unless the hold count is nonzero; `0x3062ea8` does it (sets `+0`, event flag
+  `0x2f`), `0x3062e72`/`0x3062e80` turn it back on. While `+0` is set the dispatcher skips the
+  app's `draw` (`0x305458e`) and the key poll runs the wake/demo routine `0x3060384` instead of
+  the normal one. `0x3062d8e` is "activity" (last activity = now), `0x3062db6` holds the screen on,
+  `0x3062d9c` releases it; Sony's apps call these themselves (the picture viewer holds it). A game
+  that ignored this froze after one timeout: the first snake build.
+- `0x3067cdc(ev)` is the global key handler (not a "keys blocked" check): volume ± (`0x10000004`,
+  `0x10000100`) become event flags `0x12`/`0x13`, HOLD `0x800` shows its icon; the home menu calls
+  it with each event before its own handling.
 
 ## Brick insurance (2026-10-12)
 

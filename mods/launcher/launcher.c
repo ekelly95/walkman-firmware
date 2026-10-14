@@ -2,8 +2,10 @@
  * Lists \APP0.BIN .. \APP9.BIN from the player's drive and runs the one picked: the .BIN is
  * read to NWAPP_LOAD and the launcher forwards keys and draw calls to it (nwapp.h).
  *
- * List: +/<< up, -/>> down, play opens, OPTION goes home.
- * In an app: hold BACK to come back to the list, whatever the app does with keys. */
+ * List: up/left move up, down/right move down, the pad center opens, OPTION goes home.
+ * In an app: hold BACK to come back to the list, whatever the app does with keys.
+ * Every key event restarts the screen timeout; apps that animate without input (games) hold the
+ * screen on with screen_hold/screen_release. */
 #include "nwapp.h"
 #include "ui.h"
 
@@ -132,11 +134,10 @@ static void move(int d)
 
 static int keys(void)
 {
-    if (keys_blocked())
-        return 0;
     u32 ev = key_event();
     if (!ev)
         return 0;
+    screen_activity();   /* a key press restarts the screen timeout, as in Sony's menus */
     if (running) {
         if (ev == KEY_EV(EV_LONG, KEY_BACK) || running->key(ev))
             back_to_list();
@@ -149,9 +150,9 @@ static int keys(void)
     }
     if (EV_TYPE(ev) == EV_PRESS || EV_TYPE(ev) == EV_REPEAT) {
         u32 k = EV_KEY(ev);
-        if (k == KEY_VOLUP || k == KEY_PREV)
+        if (k == KEY_UP || k == KEY_LEFT)
             move(-1);
-        else if (k == KEY_VOLDOWN || k == KEY_NEXT)
+        else if (k == KEY_DOWN || k == KEY_RIGHT)
             move(1);
         else if (k == KEY_PLAY && EV_TYPE(ev) == EV_PRESS && count)
             run(sel);
@@ -185,6 +186,8 @@ static void draw(void)
     }
     if (status[0])
         ui_text(4, 134, status, UI_GREEN);
+    else if (count)
+        ui_text(4, 134, "center: run", UI_GRAY);
     ui_text(4, 148, "OPTION: home", UI_GRAY);
 }
 

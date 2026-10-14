@@ -10,8 +10,8 @@ in each file's header) and runs the one you pick. Apps are built from `apps/` (s
 
 | | |
 |---|---|
-| + or ◀◀ / − or ▶▶ | move in the list |
-| play/pause | run the app |
+| ▲ or ◀◀ / ▼ or ▶▶ | move up / down the list |
+| center (▶II) | run the app |
 | OPTION/PWR | back to the home menu |
 | hold BACK, in an app | back to the list, whatever the app does with keys |
 

@@ -5,6 +5,32 @@ void ui_background(void)
     draw_picture_at(105, 0, 0);
 }
 
+void ui_fill(int x0, int y0, int x1, int y1, u16 color)
+{
+    lcd_window(x0, y0, x1, y1);
+    for (int n = (x1 - x0 + 1) * (y1 - y0 + 1); n > 0; n--)
+        lcd_pixel(color);
+}
+
+static u32 ticks, seed;
+
+u32 ui_ticks(void)
+{
+    if (SYST_CSR & (1u << 16))
+        ticks++;
+    return ticks;
+}
+
+u32 ui_random(void)
+{
+    if (!seed)
+        seed = SYST_CVR | 1;
+    seed ^= seed << 13;
+    seed ^= seed >> 17;
+    seed ^= seed << 5;
+    return seed;
+}
+
 void ui_text(int x, int y, const char *s, u16 color)
 {
     u16 buf[32];

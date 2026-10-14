@@ -12,7 +12,7 @@ Python 3.12, `uv`, package `nwe39x` in `src/`, CLI `uv run nwe39x ...`. Tests:
 `uv run pytest -q` (81 pass). **NOTES.md is the knowledge base**:
 every reverse-engineering fact, with addresses, lives there; read it first and keep it current.
 
-The player (one unit, serial in `nwe39x devinfo`) is on **1.29 = `mods/my-walkman` + `mods/demo-mode` + `mods/launcher`** (Photos opens the launcher; `APP1.BIN` = keytest on the drive): matrix
+The player (one unit, serial in `nwe39x devinfo`) is on **1.30 = `mods/my-walkman` + `mods/demo-mode` + `mods/launcher`** (Photos opens the launcher; on the drive `APP1.BIN` = keytest, `APP2.BIN` = snake): matrix
 theme (everything green, alert rings included) with the letter-jump letter green too
 (`letter-jump-color`), Terminus 12 in the menu font, photo boot/power-off screens
 (`bootscreen-photo`: aurora "Hello Again", green light "See You Later"), volume cap off. FM Radio is back in both menus (the user uses it; `no-fm`/`no-fm-settings` stay as
