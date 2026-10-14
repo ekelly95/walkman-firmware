@@ -21,7 +21,8 @@ DIR --sheet SHEET.png`). This is a contact sheet of the pictures, not a photo of
 nwe39x takes the updater Sony publishes for this player, changes the pictures, fonts and text
 inside it, and installs the result. The player still runs Sony's firmware, with your changes.
 
-- It is **not** Rockbox or a new firmware, and it adds no new features or audio formats.
+- It is **not** Rockbox or a new firmware, and it adds no audio formats. It can add one thing
+  Sony's firmware never had: a launcher for small apps of your own (see [Apps](#apps)).
 - It ships **no Sony files**. You download Sony's updater yourself; everything is built on your
   PC.
 - Installing needs **Windows** (it talks to the player over USB the way Sony's tool does).
@@ -37,16 +38,17 @@ inside it, and installs the result. The player still runs Sony's firmware, with 
 | **Text** | any interface string, in any of the 13 languages |
 | **Menus** | hide entries such as FM Radio from the home and Settings menus |
 | **Volume limit** | remove the regional 17-step cap |
+| **Apps** | a launcher that runs your own programs from the player's drive, such as Snake |
 
-Themes, fonts, pictures and text only replace resources. **Menu and volume changes patch the
-player's code**: a wrong one can stop it starting, so `flash` refuses them unless you pass
+Themes, fonts, pictures and text only replace resources. **Menu, volume and launcher changes patch
+the player's code**: a wrong one can stop it starting, so `flash` refuses them unless you pass
 `--allow-code-patches`.
 
 ## Tested
 
 | Player | Sony firmware | Result |
 |---|---|---|
-| NW-E394 | 1.01 | themes, fonts, boot screens, strings, menu and volume changes; stock restore |
+| NW-E394 | 1.01 | themes, fonts, boot screens, strings, menu and volume changes, the launcher and apps; stock restore |
 | NW-E393, NW-E395 | 1.01 | **untested.** Sony uses the same updater for all three, so they probably behave the same |
 | any | other versions | **untested.** Not supported |
 
@@ -124,9 +126,35 @@ the crop, and `--font`/`--font-size` set the caption font. `--preview` writes a 
 check before you build. [mods/bootscreen-photo](mods/bootscreen-photo) has the exact commands for
 the screens above.
 
+## Apps
+
+![The launcher listing two apps, and a game of Snake](docs/apps-demo.png)
+
+*The launcher and Snake, rendered with the player's own font and layout (`scripts/render_apps.py`);
+shown at 2x. Both run on the tested NW-E394.*
+
+Sony's firmware has room for 17 apps and left two of them, Record and Ebook, empty.
+`mods/launcher` puts a launcher there and makes the home menu's **Photos** icon open it. It lists
+`APP0.BIN` .. `APP9.BIN` from the top folder of the player's drive and runs the one you pick, so
+once the launcher is installed a new app is a file copy, not a flash.
+
+```
+uv run python -I scripts/build_app.py mods/launcher        # needs arm-none-eabi-gcc (WSL is fine)
+uv run nwe39x build --mod mods/launcher -o out/launcher
+uv run nwe39x flash --updater out/launcher --allow-code-patches
+
+uv run python -I scripts/build_app.py --bin apps/snake     # then copy SNAKE.BIN to the player as APP2.BIN
+```
+
+Apps are small C programs (up to 19.5 KiB) that call the firmware's own drawing, text, key and
+file routines; [apps/README.md](apps/README.md) shows how to write one. The launcher is a code
+patch like the menu changes, with the same warning: experimental, tested on one player. An app that
+crashes or hangs leaves the firmware alone; hold OPTION/PWR to turn the player off.
+
 ## More
 
 - [mods/README.md](mods/README.md): the mods, how to combine them, and how to make your own.
+- [apps/README.md](apps/README.md): the apps and how to write one.
 - `uv run nwe39x --help`: every command (exporting pictures, strings and font sheets, previews).
 - [NOTES.md](NOTES.md): reverse-engineering notes on the firmware: layout, addresses, how the
   installer works.
