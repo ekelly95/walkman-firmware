@@ -271,6 +271,7 @@ def cmd_flash(args):
     """Every check runs before anything touches the player: the image is explained against Sony's,
     changes to the OS itself need --allow-code-patches, a stock-restore build must exist, and a
     person types "flash" (or passes --yes) after seeing what will be installed where."""
+    flash.check_platform()  # before any checks or the prompt, so nobody confirms a flash that can't run
     img = Path(args.img) if args.img else args.updater / updater.IMG
     if not img.exists():
         raise FirmwareError(f"{img} not found; build it first or pass IMG")

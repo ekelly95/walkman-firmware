@@ -2,6 +2,8 @@
 a stock-restore build must exist and be stock, and a person confirms. The player and the transfer
 are stubbed, so these tests never touch a device."""
 
+import sys
+
 import pytest
 
 from nwe39x import cli, device, flash, imageres, updater, verify
@@ -32,6 +34,7 @@ def env(image_bytes, tmp_path, monkeypatch):
     monkeypatch.setattr(flash, "flash", lambda img, root, wait=True: sent.append(img) or "1.02")
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("builtins.input", lambda prompt="": "flash")
+    monkeypatch.setenv("NWE39X_LINUX_FLASH", "1")
 
     def run(*argv):
         cli.main(["flash", "--cab", str(cab), "--restore", str(tmp_path / "restore"), *map(str, argv)])
@@ -129,3 +132,17 @@ def test_unexplained_bytes_are_refused_without_suggesting_force(env):
 def _sec_off(fw):
     from nwe39x import patches
     return patches.code_offset(fw, 0, SEC_PA + 4, 2)
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="the Linux gate")
+def test_linux_gate_refuses_before_the_prompt(env, monkeypatch):
+    _, _, build, run, sent = env
+    build("restore")
+    mod = build("mod", theme)
+    monkeypatch.delenv("NWE39X_LINUX_FLASH")
+    def no_prompt(prompt=""):
+        raise AssertionError("asked to confirm a flash the gate refuses")
+    monkeypatch.setattr("builtins.input", no_prompt)
+    with pytest.raises(SystemExit, match="NWE39X_LINUX_FLASH"):
+        run("--updater", mod)
+    assert sent == []

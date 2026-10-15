@@ -20,8 +20,10 @@ class Player:
 def candidate_roots() -> list[Path]:
     if sys.platform == "win32":
         return [Path(f"{d}:/") for d in string.ascii_uppercase[3:]]
-    return [p for base in (Path("/media"), Path("/run/media"), Path("/Volumes"))
-            if base.exists() for p in base.glob("**/WALKMAN")]
+    # /media/WALKMAN, /media/$USER/WALKMAN, /run/media/$USER/WALKMAN1 (udisks adds a number when the
+    # name is taken), /Volumes/WALKMAN; never inside the mounted drives themselves.
+    return sorted(p for base in (Path("/media"), Path("/run/media"), Path("/Volumes"))
+                  if base.exists() for pattern in ("WALKMAN*", "*/WALKMAN*") for p in base.glob(pattern) if p.is_dir())
 
 
 def read_player(root: Path) -> Player | None:
