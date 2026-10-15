@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import fonts, imageres, patches, strtbl, updater
-from .rknanofw import Firmware, FirmwareError
+from .rknanofw import HEADER_SIZE, Firmware, FirmwareError
 
 MANIFEST = "manifest.json"
 
@@ -104,18 +104,26 @@ def explain(stock: Firmware, built: Firmware, patch_files: list[Path] = ()) -> R
 VERSION_REGIONS = {"firmware version (XML)", "header version", "backup header version", "CRC"}
 
 
-def os_changes(stock: Firmware, built: Firmware) -> list[int]:
-    """Offsets of changed bytes inside stage 3, the OS itself, other than its version string, and in
-    the free space between the last blob and `size`, where app sections put their code.
-    Pictures, fonts, strings and the GBK font are separate blobs; byte patches are what land here."""
-    stage = stock.blob("stage", 3)
+RESOURCE_TABLES = ("font", "gbk", "strtbl", "imageres")
+
+
+def code_changes(stock: Firmware, built: Firmware) -> list[int]:
+    """Offsets of changed payload bytes that are not inside a resource blob (font, gbk, strtbl,
+    imageres) and not the OS version string: the boot stages, the OS, unknown blobs, gaps between
+    blobs, and the free tail where app sections put their code. Checking the complement rather than
+    a list of code ranges means a `file` patch into a boot stage cannot slip past the gate.
+    Resource edits never land here; byte patches and app sections do."""
+    resources = sorted((b.offset, b.end) for t in RESOURCE_TABLES for b in stock.blobs.get(t, []) if b.size)
     m = updater.VERSION_RE.search(bytes(stock.buf))
     a, b, out = stock.buf, built.buf, []
-    for lo, hi in ((stage.offset, stage.end), (stock.blobs_end, stock.size_field)):
+    lo = HEADER_SIZE
+    for r_lo, r_hi in resources + [(stock.size_field, stock.size_field)]:  # resources may overlap or touch
+        hi = min(r_lo, stock.size_field)
         for start in range(lo, hi, 0x1000):  # compare in pages, look closer only where they differ
             end = min(start + 0x1000, hi)
             if a[start:end] != b[start:end]:
                 out += [i for i in range(start, end) if a[i] != b[i] and not m.start(1) <= i < m.end(1)]
+        lo = max(lo, r_hi)
     return out
 
 

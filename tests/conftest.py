@@ -67,7 +67,9 @@ def make_stage3() -> bytes:
     return header + section + body
 
 
-def make_image() -> bytes:
+def make_image(stage0: bytes = b"", free: int = 0) -> bytes:
+    """`stage0` gives boot stage 0 bytes; `free` adds zeros after the last blob, like the free space
+    in Sony's image where app sections go. The defaults leave both empty."""
     stage3, imageres = make_stage3(), make_imageres()
     header = bytearray(HEADER_SIZE)
     struct.pack_into("<HBB", header, 0, 0x2016, 0x14, 0x10)
@@ -84,10 +86,11 @@ def make_image() -> bytes:
             payload.extend(blob)
             offset += len(blob)
 
-    table(0x50, [b"", b"", b"", stage3])
+    table(0x50, [stage0, b"", b"", stage3])
     table(0x74, [make_font12(), make_font16()])
     table(0xF4, [make_strtbl()])
     table(0x148, [imageres])
+    payload.extend(bytes(free))
     size = HEADER_SIZE + len(payload)
     struct.pack_into("<I", header, 0x1F4, size)
     header[0x1F8:0x200] = MAGIC

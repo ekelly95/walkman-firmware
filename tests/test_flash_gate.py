@@ -1,4 +1,4 @@
-"""`nwe39x flash` refuses before anything reaches the player: OS changes need --allow-code-patches,
+"""`nwe39x flash` refuses before anything reaches the player: code changes need --allow-code-patches,
 a stock-restore build must exist and be stock, and a person confirms. The player and the transfer
 are stubbed, so these tests never touch a device."""
 
@@ -6,14 +6,24 @@ import sys
 
 import pytest
 
+from conftest import make_image
 from nwe39x import cli, device, flash, imageres, updater, verify
 from nwe39x.rknanofw import Firmware
 
 SEC_PA = 0x0306C000  # the synthetic image's one stage-3 section
 
 
+STAGE0 = bytes(range(64))  # a boot stage with bytes in it; the default synthetic image has none
+
+
 @pytest.fixture
-def env(image_bytes, tmp_path, monkeypatch):
+def image_bytes_for_env(image_bytes):
+    return image_bytes
+
+
+@pytest.fixture
+def env(image_bytes_for_env, tmp_path, monkeypatch):
+    image_bytes = image_bytes_for_env
     cab = tmp_path / "cab"
     (cab / "Data" / "Device").mkdir(parents=True)
     (cab / "SoftwareUpdateTool.exe").write_bytes(b"MZ")
@@ -67,7 +77,7 @@ def test_os_changes_need_allow_code_patches(env):
     build("restore")
     tsv = code_patch(tmp)
     mod = build("mod", lambda fw: fw.write(_sec_off(fw), b"\x01\x02"), [tsv])
-    with pytest.raises(SystemExit, match="OS itself.*patch code change"):
+    with pytest.raises(SystemExit, match="player's code.*patch code change"):
         run("--updater", mod)
     assert sent == []
     run("--updater", mod, "--allow-code-patches")
@@ -78,7 +88,7 @@ def test_force_does_not_skip_the_os_check(env):
     cab, tmp, build, run, sent = env
     build("restore")
     mod = build("mod", lambda fw: fw.write(_sec_off(fw), b"\x01\x02"))  # no manifest names it
-    with pytest.raises(SystemExit, match="OS itself"):
+    with pytest.raises(SystemExit, match="player's code"):
         run("--updater", mod, "--force")
     assert sent == []
 
@@ -146,3 +156,38 @@ def test_linux_gate_refuses_before_the_prompt(env, monkeypatch):
     with pytest.raises(SystemExit, match="NWE39X_LINUX_FLASH"):
         run("--updater", mod)
     assert sent == []
+
+
+def file_patch(tmp_path, off, old, new, name):
+    tsv = tmp_path / f"{name}.tsv"
+    tsv.write_text(f"file\t{off:x}\t{old.hex()}\t{new.hex()}\t{name}\n")
+    return tsv
+
+
+@pytest.mark.parametrize("image_bytes_for_env", [make_image(stage0=STAGE0)], ids=["stage0"])  # the image as an id overflows Windows env vars
+def test_file_patch_into_a_boot_stage_needs_allow_code_patches(env, image_bytes_for_env):
+    cab, tmp, build, run, sent = env
+    build("restore")
+    off = Firmware.from_bytes(image_bytes_for_env).blob("stage", 0).offset + 4
+    tsv = file_patch(tmp, off, STAGE0[4:8], b"\xde\xad\xbe\xef", "boot patch")
+    mod = build("mod", lambda fw: fw.write(off, b"\xde\xad\xbe\xef"), [tsv])
+    with pytest.raises(SystemExit, match="player's code.*boot patch"):
+        run("--updater", mod)
+    assert sent == []
+    run("--updater", mod, "--allow-code-patches")
+    assert sent == [mod / updater.IMG]
+
+
+@pytest.mark.parametrize("where", ["strtbl", "imageres"])
+def test_file_patch_into_a_resource_needs_no_flag(env, image_bytes, where):
+    """What the no-fm (picture table) and no-fm-settings (string records) mods do."""
+    cab, tmp, build, run, sent = env
+    build("restore")
+    fw = Firmware.from_bytes(image_bytes)
+    off = fw.blob(where).offset + (2 + 4 * 13 + 2 if where == "strtbl" else 0x20)
+    old = bytes(fw.buf[off:off + 4])
+    new = bytes(x ^ 0xFF for x in old)
+    tsv = file_patch(tmp, off, old, new, f"{where} patch")
+    mod = build("mod", lambda fw: fw.write(off, new), [tsv])
+    run("--updater", mod)
+    assert sent == [mod / updater.IMG]

@@ -30,9 +30,9 @@ uv run nwe39x flash --updater out/x                  # checks, asks "flash", cop
 ```
 
 `flash` refuses, before touching the player, an image with unexplained or mismatched bytes
-(`--force` skips only that), one that changes the OS itself (stage 3: byte patches such as
-volume-limit and menu hiding; pass `--allow-code-patches` once checked; themes, fonts, strings and
-pictures never need it), and any flash without a stock build in `out/stock-restore`. Then it asks
+(`--force` skips only that), one that changes the player's code (boot stages, OS, unknown blobs
+or free space: byte patches such as volume-limit and menu hiding; pass `--allow-code-patches` once
+checked; themes, fonts, strings and pictures never need it), and any flash without a stock build in `out/stock-restore`. Then it asks
 for "flash" to be typed. An assistant passes `--yes` only after the user has approved that flash.
 
 Sony's files live in `extract/cab/` (ignored by git; `nwe39x unpack NW-E390_V1_01.exe` recreates

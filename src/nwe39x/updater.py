@@ -95,11 +95,27 @@ def next_version(version: str) -> str:
     return f"{n // 100}.{n % 100:02d}"
 
 
+def clear_outdir(cab_dir: Path, outdir: Path):
+    """Remove `outdir` before a build, but only if it is empty or an earlier build (it holds the
+    updater and an image), and never the unpacked updater itself or a folder around it, so a
+    mistyped -o (".", "~", "extract/cab") cannot delete anything else."""
+    if not outdir.exists():
+        return
+    if not outdir.is_dir():
+        raise FirmwareError(f"{outdir} is a file, not a build folder")
+    out, cab = outdir.resolve(), Path(cab_dir).resolve()
+    if out == cab or out in cab.parents:
+        raise FirmwareError(f"{outdir} holds Sony's unpacked updater ({cab_dir}); build somewhere else")
+    if any(out.iterdir()) and not ((out / "SoftwareUpdateTool.exe").is_file() and (out / IMG).is_file()):
+        raise FirmwareError(f"{outdir} is not empty and is not an earlier build; not deleting it. "
+                            "Pick another -o or remove it yourself")
+    shutil.rmtree(out)
+
+
 def build(cab_dir: Path, fw: Firmware, version: str, outdir: Path) -> Path:
     """Write a runnable copy of Sony's updater that installs `fw` as `version`."""
     set_firmware_version(fw, version)
-    if outdir.exists():
-        shutil.rmtree(outdir)
+    clear_outdir(cab_dir, outdir)
     shutil.copytree(cab_dir, outdir)
     fw.save(outdir / IMG)
     xml = outdir / SWUPDATE
