@@ -164,7 +164,7 @@ def file_patch(tmp_path, off, old, new, name):
     return tsv
 
 
-@pytest.mark.parametrize("image_bytes_for_env", [make_image(stage0=STAGE0)])
+@pytest.mark.parametrize("image_bytes_for_env", [make_image(stage0=STAGE0)], ids=["stage0"])  # the image as an id overflows Windows env vars
 def test_file_patch_into_a_boot_stage_needs_allow_code_patches(env, image_bytes_for_env):
     cab, tmp, build, run, sent = env
     build("restore")
