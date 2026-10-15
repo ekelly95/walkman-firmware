@@ -22,7 +22,7 @@
   nwe39x restore                           Sony's stock firmware, re-versioned so it installs over a mod
                                            (out/stock-restore; flash refuses until it exists)
   nwe39x flash [IMG]                       install a built image directly (copy + START FW UPDATE over SCSI);
-                                           OS byte patches need --allow-code-patches
+                                           code byte patches need --allow-code-patches
   nwe39x devinfo                           the DEVINFO block the player returns over SCSI
 """
 
@@ -269,7 +269,7 @@ def cmd_devinfo(args):
 
 def cmd_flash(args):
     """Every check runs before anything touches the player: the image is explained against Sony's,
-    changes to the OS itself need --allow-code-patches, a stock-restore build must exist, and a
+    changes to the player's code need --allow-code-patches, a stock-restore build must exist, and a
     person types "flash" (or passes --yes) after seeing what will be installed where."""
     flash.check_platform()  # before any checks or the prompt, so nobody confirms a flash that can't run
     img = Path(args.img) if args.img else args.updater / updater.IMG
@@ -289,13 +289,14 @@ def cmd_flash(args):
     if not args.force and rep.mismatched:
         raise FirmwareError(f"{len(rep.mismatched)} bytes inside the manifest's patches are not the patches' new bytes "
                             f"(first at {rep.mismatched[0]:#x}); not flashing. Rebuild with `nwe39x build`.")
-    if (os_bytes := verify.os_changes(stock, built)) and not args.allow_code_patches:
-        in_os = set(os_bytes)
+    if (code_bytes := verify.code_changes(stock, built)) and not args.allow_code_patches:
+        in_code = set(code_bytes)
         names = sorted({n for f in (manifest["patches"] if manifest else [])
-                        for s, e, n in patches.regions(stock, patches.parse_tsv(Path(f))) if in_os.intersection(range(s, e))})
+                        for s, e, n in patches.regions(stock, patches.parse_tsv(Path(f))) if in_code.intersection(range(s, e))})
         names = names or ["(no patch names them)"]
         raise FirmwareError(
-            f"this image changes {len(os_bytes)} bytes of the OS itself (stage 3, first at {os_bytes[0]:#x}): "
+            f"this image changes {len(code_bytes)} bytes of the player's code (boot stages, OS, or free space; "
+            f"first at {code_bytes[0]:#x}): "
             + "; ".join(names[:5]) + (f"; and {len(names) - 5} more" if len(names) > 5 else "")
             + ". Themes, fonts, strings and pictures never do; byte patches (volume-limit, menu hiding) do, and a "
             "wrong one can stop the player booting with no way back. Pass --allow-code-patches once you have checked them.")
@@ -355,7 +356,7 @@ def main(argv: list[str] | None = None):
     p.add_argument("--no-wait", action="store_true", help="return right after sending the command")
     p.add_argument("--force", action="store_true", help="flash even if the image changes bytes the build did not declare")
     p.add_argument("--allow-code-patches", action="store_true",
-                   help="allow changes to the OS itself (byte patches such as volume-limit or menu hiding); themes, "
+                   help="allow changes to the player's code (byte patches such as volume-limit or menu hiding); themes, "
                         "fonts, strings and pictures never need it")
     p.add_argument("--restore", type=Path, default=DEFAULT_RESTORE,
                    help=f"stock-restore build that must exist first (default: {DEFAULT_RESTORE})")
