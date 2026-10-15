@@ -102,6 +102,30 @@ def test_build_writes_runnable_folder(image_bytes, tmp_path):
     assert (cab / updater.IMG).read_bytes() == image_bytes  # Sony's copy untouched
 
 
+def test_build_only_replaces_an_empty_folder_or_an_earlier_build(image_bytes, tmp_path):
+    cab = tmp_path / "extract" / "cab"
+    (cab / "Data" / "Device").mkdir(parents=True)
+    (cab / "SoftwareUpdateTool.exe").write_bytes(b"MZ")
+    (cab / updater.IMG).write_bytes(image_bytes)
+    (cab / updater.SWUPDATE).write_text("<Common>\n<Version>1.01</Version>\n</Common>", encoding="iso-8859-1")
+    fw = lambda: Firmware.from_bytes(image_bytes)
+    out = tmp_path / "out"
+    updater.build(cab, fw(), "1.02", out)
+    updater.build(cab, fw(), "1.03", out)  # an earlier build is replaced
+    assert updater.firmware_version(Firmware.load(out / updater.IMG)) == "1.03"
+    (tmp_path / "empty").mkdir()
+    updater.build(cab, fw(), "1.02", tmp_path / "empty")
+    other = tmp_path / "notes"
+    other.mkdir()
+    (other / "keep.txt").write_text("mine")
+    for target, msg in ((other, "not an earlier build"), (cab, "Sony's unpacked updater"),
+                        (tmp_path / "extract", "Sony's unpacked updater"), (other / "keep.txt", "is a file")):
+        with pytest.raises(FirmwareError, match=msg):
+            updater.build(cab, fw(), "1.02", target)
+    assert (other / "keep.txt").read_text() == "mine"
+    assert (cab / updater.IMG).read_bytes() == image_bytes
+
+
 def test_carve_cab_skips_false_headers():
     real = b"MSCF" + bytes(4) + struct.pack("<I", 40) + bytes(16) + struct.pack("<H", 3) + bytes(10)
     exe = b"MZ" + b"MSCF" + b"\xff" * 30 + real + b"tail"
