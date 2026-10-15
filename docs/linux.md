@@ -23,7 +23,8 @@ load the sg driver with `sudo modprobe sg`.
 
 ## 2. Read-only check: `devinfo`
 
-Plug in the player and let Dolphin mount it (it appears as `/media/$USER/WALKMAN`), then:
+Plug in the player and let Dolphin mount it (on Arch/CachyOS it appears as `/run/media/$USER/WALKMAN`;
+some distros use `/media/$USER/WALKMAN`), then:
 
 ```bash
 uv run nwe39x devinfo
@@ -42,6 +43,18 @@ afford to get wrong but that changes nothing:
 NWE39X_LINUX_FLASH=1 uv run nwe39x flash --updater out/stock-restore
 ```
 
-Every Windows check still runs first. On Linux, `flash` also syncs the image's directory entry and the
-filesystem before sending START FW UPDATE. Linux may not remount the player when it restarts: if
-`flash` waits, open it in Dolphin. If it reports the version you expected, Linux flashing works for you.
+Every Windows check still runs first, and `flash` refuses before asking you to confirm if
+`NWE39X_LINUX_FLASH=1` is missing. On Linux, `flash` then:
+
+1. finds the player's `/dev/sgN` and its partition (say `/dev/sdb1`) while it is still mounted;
+2. copies the image and syncs it;
+3. **unmounts the player** with `udisksctl unmount`, so Linux can't write to the filesystem while the
+   player reads the image and rewrites it. If something is using the player (a Dolphin window, a
+   terminal inside it), this fails and nothing is sent: close it and run `flash` again;
+4. sends START FW UPDATE to `/dev/sgN`. If the USB link drops as the player takes the command, that
+   usually means it reset to install, so `flash` says so and keeps waiting. **Don't unplug it;**
+5. waits for the player to leave USB and come back, and only accepts the player with the same
+   serial (`devinfo`), even if Linux mounts it as `WALKMAN1` or another player is plugged in.
+
+If it doesn't come back mounted, open it in Dolphin. If it reports the version you expected, Linux
+flashing works for you.
